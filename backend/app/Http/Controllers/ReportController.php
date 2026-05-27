@@ -10,8 +10,7 @@ class ReportController extends Controller
 {
     public function export(Request $request): StreamedResponse
     {
-        $query = StockTransaction::with(['product.category', 'warehouse'])
-            ->where('user_id', $request->user()->id);
+        $query = StockTransaction::with(['product.category', 'warehouse', 'user']);
 
         if ($request->filled('start_date')) {
             $query->whereDate('transaction_date', '>=', $request->start_date);

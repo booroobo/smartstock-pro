@@ -13,7 +13,6 @@ class ProductController extends Controller
     public function index(Request $request)
     {
         $products = Product::with('category')
-            ->where('user_id', $request->user()->id)
             ->latest()
             ->get();
 
@@ -32,7 +31,7 @@ class ProductController extends Controller
             'image' => 'nullable|image|mimes:jpg,jpeg,png|max:2048',
         ]);
 
-        $this->ownedCategory($request, $validated['product_category_id']);
+        $this->findCategory($validated['product_category_id']);
 
         if ($request->hasFile('image')) {
             $validated['image'] = $request->file('image')->store('products', 'public');
@@ -51,19 +50,11 @@ class ProductController extends Controller
 
     public function show(Request $request, Product $product)
     {
-        if ($product->user_id !== $request->user()->id) {
-            return response()->json(['success' => false, 'message' => 'Akses ditolak'], 403);
-        }
-
         return response()->json(['success' => true, 'message' => 'Detail produk berhasil diambil', 'data' => $product->load('category')]);
     }
 
     public function update(Request $request, Product $product)
     {
-        if ($product->user_id !== $request->user()->id) {
-            return response()->json(['success' => false, 'message' => 'Akses ditolak'], 403);
-        }
-
         $validated = $request->validate([
             'product_category_id' => 'required|exists:product_categories,id',
             'sku' => 'nullable|string|max:80',
@@ -74,7 +65,7 @@ class ProductController extends Controller
             'image' => 'nullable|image|mimes:jpg,jpeg,png|max:2048',
         ]);
 
-        $this->ownedCategory($request, $validated['product_category_id']);
+        $this->findCategory($validated['product_category_id']);
         $oldValues = $product->toArray();
 
         if ($request->hasFile('image')) {
@@ -92,10 +83,6 @@ class ProductController extends Controller
 
     public function destroy(Request $request, Product $product)
     {
-        if ($product->user_id !== $request->user()->id) {
-            return response()->json(['success' => false, 'message' => 'Akses ditolak'], 403);
-        }
-
         $oldValues = $product->toArray();
         if ($product->image) {
             Storage::disk('public')->delete($product->image);
@@ -106,9 +93,9 @@ class ProductController extends Controller
         return response()->json(['success' => true, 'message' => 'Produk berhasil dihapus']);
     }
 
-    private function ownedCategory(Request $request, int $id): ProductCategory
+    private function findCategory(int $id): ProductCategory
     {
-        return ProductCategory::where('id', $id)->where('user_id', $request->user()->id)->firstOrFail();
+        return ProductCategory::findOrFail($id);
     }
 
     private function audit(Request $request, string $action, Product $product, ?array $oldValues, ?array $newValues): void

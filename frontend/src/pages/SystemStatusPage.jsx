@@ -1,26 +1,55 @@
 import { useEffect, useState } from "react";
-import AppNav from "../components/AppNav";
+import DashboardLayout from "../components/DashboardLayout";
+import SummaryCard from "../components/SummaryCard";
 import { getHealth } from "../api/systemApi";
 
 export default function SystemStatusPage() {
   const [status, setStatus] = useState(null);
 
+  const fetchStatus = async () => {
+    const response = await getHealth();
+    setStatus(response.data.data);
+  };
+
   useEffect(() => {
-    getHealth().then((response) => setStatus(response.data.data));
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    fetchStatus();
   }, []);
 
   return (
-    <div className="app-shell">
-      <AppNav />
-      <main className="content">
-        <div className="page-header"><div><h1>System Status</h1><p>Health check API dan database.</p></div></div>
-        <section className="metric-grid">
-          <div className="metric"><span>API</span><strong>{status?.api_status || "-"}</strong></div>
-          <div className="metric"><span>Database</span><strong>{status?.database_status || "-"}</strong></div>
-          <div className="metric"><span>Version</span><strong>{status?.app_version || "-"}</strong></div>
-          <div className="metric"><span>Timestamp</span><strong>{status?.timestamp || "-"}</strong></div>
-        </section>
-      </main>
-    </div>
+    <DashboardLayout title="Status Sistem" subtitle="Health check" onRefresh={fetchStatus}>
+      <div className="ss-page-head">
+        <div>
+          <h1>Status Sistem</h1>
+          <p>Health check API dan database.</p>
+        </div>
+        <button className="ss-primary" onClick={fetchStatus}>
+          <span className="material-symbols-outlined">terminal</span>
+          Lihat Status Sistem
+        </button>
+      </div>
+
+      <section className="ss-grid-4">
+        <SummaryCard label="API" value={status?.api_status || "-"} icon="cloud_done" hint="Online" />
+        <SummaryCard label="Database" value={status?.database_status || "-"} icon="database" hint="PostgreSQL" />
+        <SummaryCard label="Versi" value={status?.app_version || "-"} icon="new_releases" hint="MVP" />
+        <SummaryCard label="Timestamp" value={status?.timestamp ? new Date(status.timestamp).toLocaleTimeString("id-ID") : "-"} icon="schedule" hint="Terbaru" />
+      </section>
+
+      <section className="ss-card">
+        <h2>Utilisasi Resource</h2>
+        {["Penggunaan CPU", "Memori", "Disk IOPS", "Jaringan"].map((metric, index) => (
+          <div className="ss-progress" style={{ width: "100%", marginBottom: 22 }} key={metric}>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+              <strong>{metric}</strong>
+              <span>{(index + 1) * 20}%</span>
+            </div>
+            <div className="ss-progress-track">
+              <div className="ss-progress-bar" style={{ width: `${(index + 1) * 20}%` }} />
+            </div>
+          </div>
+        ))}
+      </section>
+    </DashboardLayout>
   );
 }

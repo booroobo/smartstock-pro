@@ -10,7 +10,7 @@ class WarehouseController extends Controller
 {
     public function index(Request $request)
     {
-        $warehouses = Warehouse::where('user_id', $request->user()->id)->latest()->get();
+        $warehouses = Warehouse::latest()->get();
 
         return response()->json(['success' => true, 'message' => 'Data gudang berhasil diambil', 'data' => $warehouses]);
     }
@@ -31,19 +31,11 @@ class WarehouseController extends Controller
 
     public function show(Request $request, Warehouse $warehouse)
     {
-        if ($warehouse->user_id !== $request->user()->id) {
-            return response()->json(['success' => false, 'message' => 'Akses ditolak'], 403);
-        }
-
         return response()->json(['success' => true, 'message' => 'Detail gudang berhasil diambil', 'data' => $warehouse]);
     }
 
     public function update(Request $request, Warehouse $warehouse)
     {
-        if ($warehouse->user_id !== $request->user()->id) {
-            return response()->json(['success' => false, 'message' => 'Akses ditolak'], 403);
-        }
-
         $validated = $request->validate([
             'name' => 'required|string|max:120',
             'location' => 'nullable|string|max:150',
@@ -59,10 +51,6 @@ class WarehouseController extends Controller
 
     public function destroy(Request $request, Warehouse $warehouse)
     {
-        if ($warehouse->user_id !== $request->user()->id) {
-            return response()->json(['success' => false, 'message' => 'Akses ditolak'], 403);
-        }
-
         $oldValues = $warehouse->toArray();
         $warehouse->delete();
         $this->audit($request, 'delete', $warehouse, $oldValues, null);

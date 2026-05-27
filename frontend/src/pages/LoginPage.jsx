@@ -1,12 +1,19 @@
 import { useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
+
+const demoAccounts = [
+  ["Admin", "admin@smartstock.com"],
+  ["Manajer Gudang", "manager@smartstock.com"],
+  ["Staf Gudang", "staff@smartstock.com"],
+  ["Viewer", "viewer@smartstock.com"],
+];
 
 export default function LoginPage() {
   const navigate = useNavigate();
   const { login, loading } = useAuth();
 
-  const [email, setEmail] = useState("demo@smartstock.com");
+  const [email, setEmail] = useState("admin@smartstock.com");
   const [password, setPassword] = useState("password123");
   const [error, setError] = useState("");
 
@@ -27,37 +34,55 @@ export default function LoginPage() {
     <div className="auth-page">
       <div className="auth-card">
         <h1>SmartStock Pro</h1>
-        <p>Login untuk mengelola inventaris gudang.</p>
+        <p>Masuk menggunakan akun internal perusahaan.</p>
 
         {error && <div className="alert-error">{error}</div>}
 
         <form onSubmit={handleSubmit}>
-          <label>Email</label>
-          <input
-            type="email"
-            value={email}
-            placeholder="Masukkan email"
-            onChange={(e) => setEmail(e.target.value)}
-            required
-          />
+          <label>
+            Email
+            <input
+              type="email"
+              value={email}
+              placeholder="Masukkan email"
+              onChange={(e) => setEmail(e.target.value)}
+              required
+            />
+          </label>
 
-          <label>Password</label>
-          <input
-            type="password"
-            value={password}
-            placeholder="Masukkan password"
-            onChange={(e) => setPassword(e.target.value)}
-            required
-          />
+          <label>
+            Password
+            <input
+              type="password"
+              value={password}
+              placeholder="Masukkan password"
+              onChange={(e) => setPassword(e.target.value)}
+              required
+            />
+          </label>
 
           <button type="submit" disabled={loading}>
-            {loading ? "Loading..." : "Login"}
+            {loading ? "Memuat..." : "Masuk"}
           </button>
         </form>
 
-        <p>
-          Belum punya akun? <Link to="/register">Register</Link>
-        </p>
+        <div className="demo-accounts">
+          <strong>Akun Demo</strong>
+          {demoAccounts.map(([role, accountEmail]) => (
+            <button
+              key={accountEmail}
+              type="button"
+              onClick={() => {
+                setEmail(accountEmail);
+                setPassword("password123");
+              }}
+            >
+              <span>{role}</span>
+              <code>{accountEmail}</code>
+            </button>
+          ))}
+          <small>Password semua akun: <code>password123</code></small>
+        </div>
       </div>
     </div>
   );

@@ -25,7 +25,13 @@ class Product extends Model
 
     public function getImageUrlAttribute()
     {
-        return $this->image ? asset('storage/' . $this->image) : null;
+        if (!$this->image) {
+            return null;
+        }
+
+        $baseUrl = request()?->getSchemeAndHttpHost() ?: config('app.url');
+
+        return rtrim($baseUrl, '/') . '/storage/' . ltrim($this->image, '/');
     }
 
     public function user()

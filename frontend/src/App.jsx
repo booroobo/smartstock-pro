@@ -2,7 +2,6 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "./contexts/AuthContext";
 import ProtectedRoute from "./components/ProtectedRoute";
 import LoginPage from "./pages/LoginPage";
-import RegisterPage from "./pages/RegisterPage";
 import DashboardPage from "./pages/DashboardPage";
 import CategoriesPage from "./pages/CategoriesPage";
 import ProductsPage from "./pages/ProductsPage";
@@ -10,6 +9,11 @@ import WarehousesPage from "./pages/WarehousesPage";
 import StockTransactionsPage from "./pages/StockTransactionsPage";
 import ReportsPage from "./pages/ReportsPage";
 import SystemStatusPage from "./pages/SystemStatusPage";
+import SuppliersPage from "./pages/SuppliersPage";
+import AuditLogsPage from "./pages/AuditLogsPage";
+import ImportDataPage from "./pages/ImportDataPage";
+import QueueJobsPage from "./pages/QueueJobsPage";
+import RoleAccessPage from "./pages/RoleAccessPage";
 
 export default function App() {
   return (
@@ -18,7 +22,7 @@ export default function App() {
         <Routes>
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
           <Route path="/login" element={<LoginPage />} />
-          <Route path="/register" element={<RegisterPage />} />
+          <Route path="/register" element={<Navigate to="/login" replace />} />
 
           <Route
             path="/dashboard"
@@ -83,6 +87,46 @@ export default function App() {
               element={
                 <ProtectedRoute>
                   <SystemStatusPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/suppliers"
+              element={
+                <ProtectedRoute>
+                  <SuppliersPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/audit-logs"
+              element={
+                <ProtectedRoute>
+                  <AuditLogsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/import-data"
+              element={
+                <ProtectedRoute>
+                  <ImportDataPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/queue-jobs"
+              element={
+                <ProtectedRoute>
+                  <QueueJobsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/role-access"
+              element={
+                <ProtectedRoute>
+                  <RoleAccessPage />
                 </ProtectedRoute>
               }
             />

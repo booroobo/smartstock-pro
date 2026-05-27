@@ -10,9 +10,7 @@ class CategoryController extends Controller
 {
     public function index(Request $request)
     {
-        $categories = ProductCategory::where('user_id', $request->user()->id)
-            ->latest()
-            ->get();
+        $categories = ProductCategory::latest()->get();
 
         return response()->json([
             'success' => true,
@@ -45,13 +43,6 @@ class CategoryController extends Controller
 
     public function show(Request $request, ProductCategory $category)
     {
-        if ($category->user_id !== $request->user()->id) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Akses ditolak',
-            ], 403);
-        }
-
         return response()->json([
             'success' => true,
             'message' => 'Detail kategori berhasil diambil',
@@ -61,13 +52,6 @@ class CategoryController extends Controller
 
     public function update(Request $request, ProductCategory $category)
     {
-        if ($category->user_id !== $request->user()->id) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Akses ditolak',
-            ], 403);
-        }
-
         $validated = $request->validate([
             'name' => 'required|string|max:100',
             'description' => 'nullable|string',
@@ -86,13 +70,6 @@ class CategoryController extends Controller
 
     public function destroy(Request $request, ProductCategory $category)
     {
-        if ($category->user_id !== $request->user()->id) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Akses ditolak',
-            ], 403);
-        }
-
         $oldValues = $category->toArray();
         $category->delete();
         $this->audit($request, 'delete', $category, $oldValues, null);

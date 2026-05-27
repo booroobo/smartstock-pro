@@ -2,13 +2,13 @@ import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 
 const links = [
-  ["/dashboard", "Dashboard"],
-  ["/categories", "Categories"],
-  ["/warehouses", "Warehouses"],
-  ["/products", "Products"],
-  ["/stock-transactions", "Stock Transactions"],
-  ["/reports", "Reports"],
-  ["/system-status", "System Status"],
+  ["/dashboard", "Dasbor"],
+  ["/categories", "Kategori Produk"],
+  ["/warehouses", "Gudang"],
+  ["/products", "Produk"],
+  ["/stock-transactions", "Transaksi Stok"],
+  ["/reports", "Laporan"],
+  ["/system-status", "Status Sistem"],
 ];
 
 export default function AppNav() {
@@ -28,7 +28,7 @@ export default function AppNav() {
           </Link>
         ))}
       </nav>
-      <button className="secondary" onClick={logout}>Logout</button>
+      <button className="secondary" onClick={logout}>Keluar</button>
     </aside>
   );
 }

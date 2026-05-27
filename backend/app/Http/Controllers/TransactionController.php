@@ -13,8 +13,7 @@ class TransactionController extends Controller
 {
     public function index(Request $request)
     {
-        $query = StockTransaction::with(['product.category', 'warehouse'])
-            ->where('user_id', $request->user()->id);
+        $query = StockTransaction::with(['product.category', 'warehouse', 'user']);
 
         if ($request->filled('type')) {
             $query->where('type', $request->type);
@@ -57,8 +56,8 @@ class TransactionController extends Controller
         ]);
 
         $transaction = DB::transaction(function () use ($request, $validated) {
-            $product = $this->ownedProduct($request, $validated['product_id']);
-            $this->ownedWarehouse($request, $validated['warehouse_id']);
+            $product = $this->findProduct($validated['product_id']);
+            $this->findWarehouse($validated['warehouse_id']);
             $this->applyStock($product, $validated['type'], (int) $validated['quantity']);
 
             $transaction = StockTransaction::create([
@@ -80,10 +79,6 @@ class TransactionController extends Controller
 
     public function show(Request $request, StockTransaction $transaction)
     {
-        if ($transaction->user_id !== $request->user()->id) {
-            return response()->json(['success' => false, 'message' => 'Akses ditolak'], 403);
-        }
-
         return response()->json([
             'success' => true,
             'message' => 'Detail transaksi stok berhasil diambil',
@@ -93,10 +88,6 @@ class TransactionController extends Controller
 
     public function update(Request $request, StockTransaction $transaction)
     {
-        if ($transaction->user_id !== $request->user()->id) {
-            return response()->json(['success' => false, 'message' => 'Akses ditolak'], 403);
-        }
-
         $validated = $request->validate([
             'product_id' => 'required|exists:products,id',
             'warehouse_id' => 'required|exists:warehouses,id',
@@ -108,11 +99,11 @@ class TransactionController extends Controller
 
         DB::transaction(function () use ($request, $transaction, $validated) {
             $oldValues = $transaction->toArray();
-            $oldProduct = $this->ownedProduct($request, $transaction->product_id);
+            $oldProduct = $this->findProduct($transaction->product_id);
             $this->reverseStock($oldProduct, $transaction->type, (int) $transaction->quantity);
 
-            $newProduct = $this->ownedProduct($request, $validated['product_id']);
-            $this->ownedWarehouse($request, $validated['warehouse_id']);
+            $newProduct = $this->findProduct($validated['product_id']);
+            $this->findWarehouse($validated['warehouse_id']);
             $this->applyStock($newProduct, $validated['type'], (int) $validated['quantity']);
 
             $transaction->update($validated);
@@ -128,13 +119,9 @@ class TransactionController extends Controller
 
     public function destroy(Request $request, StockTransaction $transaction)
     {
-        if ($transaction->user_id !== $request->user()->id) {
-            return response()->json(['success' => false, 'message' => 'Akses ditolak'], 403);
-        }
-
         DB::transaction(function () use ($request, $transaction) {
             $oldValues = $transaction->toArray();
-            $product = $this->ownedProduct($request, $transaction->product_id);
+            $product = $this->findProduct($transaction->product_id);
             $this->reverseStock($product, $transaction->type, (int) $transaction->quantity);
             $transaction->delete();
             $this->audit($request, 'delete', $transaction, $oldValues, null);
@@ -146,14 +133,14 @@ class TransactionController extends Controller
         ]);
     }
 
-    private function ownedProduct(Request $request, int $id): Product
+    private function findProduct(int $id): Product
     {
-        return Product::where('id', $id)->where('user_id', $request->user()->id)->firstOrFail();
+        return Product::findOrFail($id);
     }
 
-    private function ownedWarehouse(Request $request, int $id): Warehouse
+    private function findWarehouse(int $id): Warehouse
     {
-        return Warehouse::where('id', $id)->where('user_id', $request->user()->id)->firstOrFail();
+        return Warehouse::findOrFail($id);
     }
 
     private function applyStock(Product $product, string $type, int $quantity): void

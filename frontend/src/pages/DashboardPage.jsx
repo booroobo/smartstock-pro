@@ -9,88 +9,105 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import AppNav from "../components/AppNav";
+import DashboardLayout from "../components/DashboardLayout";
+import SummaryCard from "../components/SummaryCard";
+import DataTable from "../components/DataTable";
+import Alert from "../components/Alert";
 import { getDashboard } from "../api/dashboardApi";
+import { displayStockType } from "../utils/roles";
 
 export default function DashboardPage() {
   const [dashboard, setDashboard] = useState(null);
+  const [error, setError] = useState("");
+
+  const fetchDashboard = async () => {
+    setError("");
+    try {
+      const response = await getDashboard();
+      setDashboard(response.data.data);
+    } catch {
+      setError("Dasbor inventaris gagal dimuat.");
+    }
+  };
 
   useEffect(() => {
-    getDashboard().then((response) => setDashboard(response.data.data));
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    fetchDashboard();
   }, []);
 
-  const chartData = dashboard?.stock_movement_by_category || [];
+  const criticalCount = dashboard?.critical_stock_products?.length || 0;
 
   return (
-    <div className="app-shell">
-      <AppNav />
-      <main className="content">
-        <div className="page-header">
-          <div>
-            <h1>Inventory Dashboard</h1>
-            <p>Ringkasan stok, transaksi terbaru, dan produk kritis.</p>
-          </div>
-        </div>
+    <DashboardLayout title="Dasbor Inventaris" subtitle="Ringkasan langsung" onRefresh={fetchDashboard}>
+      {criticalCount > 0 && (
+        <Alert
+          type="error"
+          message={`${criticalCount} produk berada pada atau di bawah minimum stock.`}
+        />
+      )}
+      {error && <Alert message={error} onClose={() => setError("")} />}
 
-        <section className="metric-grid">
-          <div className="metric"><span>Total Products</span><strong>{dashboard?.total_products || 0}</strong></div>
-          <div className="metric"><span>Total Stock In</span><strong>{dashboard?.total_stock_in || 0}</strong></div>
-          <div className="metric"><span>Total Stock Out</span><strong>{dashboard?.total_stock_out || 0}</strong></div>
-          <div className="metric"><span>Critical Stock</span><strong>{dashboard?.critical_stock_products?.length || 0}</strong></div>
+      <div className="ss-page-head">
+        <div>
+          <h1>Dasbor Inventaris</h1>
+          <p>Ringkasan stok, transaksi terbaru, dan produk kritis.</p>
+        </div>
+        <button className="ss-primary" onClick={fetchDashboard}>
+          <span className="material-symbols-outlined">refresh</span>
+          Muat Ulang Dasbor
+        </button>
+      </div>
+
+      <section className="ss-grid-4">
+        <SummaryCard label="Total Produk" value={dashboard?.total_products || 0} icon="inventory_2" hint="Aktif" />
+        <SummaryCard label="Total Stok Masuk" value={dashboard?.total_stock_in || 0} icon="login" hint="Masuk" />
+        <SummaryCard label="Total Stok Keluar" value={dashboard?.total_stock_out || 0} icon="logout" hint="Keluar" />
+        <SummaryCard label="Stok Kritis" value={criticalCount} icon="error" tone="danger" hint="Prioritas" />
+      </section>
+
+      <section className="ss-card">
+        <h2>Pergerakan Stok per Kategori</h2>
+        <div className="ss-chart">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={dashboard?.stock_movement_by_category || []}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="category" />
+              <YAxis allowDecimals={false} />
+              <Tooltip />
+              <Legend />
+              <Bar dataKey="stock_in" fill="#0f172a" name="Stok Masuk" />
+              <Bar dataKey="stock_out" fill="#d3e4fe" name="Stok Keluar" />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </section>
+
+      <div className="ss-grid-2">
+        <section className="ss-card">
+          <h2>Produk Stok Kritis</h2>
+          <DataTable
+            columns={[
+              { key: "name", label: "Produk" },
+              { key: "current_stock", label: "Stok" },
+              { key: "minimum_stock", label: "Minimum" },
+            ]}
+            rows={dashboard?.critical_stock_products || []}
+          />
         </section>
 
-        <section className="panel">
-          <h2>Stock Movement by Category</h2>
-          <div className="chart-wrap">
-            <ResponsiveContainer width="100%" height={320}>
-              <BarChart data={chartData}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="category" />
-                <YAxis allowDecimals={false} />
-                <Tooltip />
-                <Legend />
-                <Bar dataKey="stock_in" fill="#2563eb" name="Stock In" />
-                <Bar dataKey="stock_out" fill="#dc2626" name="Stock Out" />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
+        <section className="ss-card">
+          <h2>Transaksi Stok Terbaru</h2>
+          <DataTable
+            columns={[
+              { key: "transaction_date", label: "Tanggal" },
+              { key: "product", label: "Produk", render: (row) => row.product?.name || "-" },
+              { key: "type", label: "Tipe", render: (row) => <span className={`ss-badge ${row.type}`}>{displayStockType(row.type)}</span> },
+              { key: "quantity", label: "Jumlah" },
+            ]}
+            rows={dashboard?.latest_stock_transactions || []}
+          />
         </section>
-
-        <div className="two-column">
-          <section className="panel">
-            <h2>Critical Stock Products</h2>
-            <table>
-              <thead><tr><th>Product</th><th>Stock</th><th>Minimum</th></tr></thead>
-              <tbody>
-                {(dashboard?.critical_stock_products || []).map((product) => (
-                  <tr key={product.id}>
-                    <td>{product.name}</td>
-                    <td>{product.current_stock}</td>
-                    <td>{product.minimum_stock}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </section>
-
-          <section className="panel">
-            <h2>Latest Stock Transactions</h2>
-            <table>
-              <thead><tr><th>Date</th><th>Product</th><th>Type</th><th>Qty</th></tr></thead>
-              <tbody>
-                {(dashboard?.latest_stock_transactions || []).map((transaction) => (
-                  <tr key={transaction.id}>
-                    <td>{transaction.transaction_date}</td>
-                    <td>{transaction.product?.name}</td>
-                    <td><span className={`badge ${transaction.type}`}>{transaction.type}</span></td>
-                    <td>{transaction.quantity}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </section>
-        </div>
-      </main>
-    </div>
+      </div>
+    </DashboardLayout>
   );
 }

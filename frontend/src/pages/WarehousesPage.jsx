@@ -1,5 +1,11 @@
 import { useEffect, useState } from "react";
-import AppNav from "../components/AppNav";
+import DashboardLayout from "../components/DashboardLayout";
+import DataTable from "../components/DataTable";
+import Modal from "../components/Modal";
+import WarehouseForm from "../components/WarehouseForm";
+import Alert from "../components/Alert";
+import { useAuth } from "../contexts/AuthContext";
+import { canManageMasterData, deniedMessage } from "../utils/roles";
 import {
   createWarehouse,
   deleteWarehouse,
@@ -10,13 +16,21 @@ import {
 const emptyForm = { name: "", location: "", description: "" };
 
 export default function WarehousesPage() {
+  const { user } = useAuth();
+  const canManage = canManageMasterData(user?.role);
   const [warehouses, setWarehouses] = useState([]);
   const [form, setForm] = useState(emptyForm);
   const [editingId, setEditingId] = useState(null);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [error, setError] = useState("");
 
   const fetchWarehouses = async () => {
-    const response = await getWarehouses();
-    setWarehouses(response.data.data);
+    try {
+      const response = await getWarehouses();
+      setWarehouses(response.data.data);
+    } catch (err) {
+      setError(err.response?.status === 403 ? deniedMessage : "Data gudang gagal dimuat.");
+    }
   };
 
   useEffect(() => {
@@ -24,12 +38,23 @@ export default function WarehousesPage() {
     fetchWarehouses();
   }, []);
 
+  const openCreate = () => {
+    setEditingId(null);
+    setForm(emptyForm);
+    setModalOpen(true);
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
-    editingId ? await updateWarehouse(editingId, form) : await createWarehouse(form);
-    setForm(emptyForm);
-    setEditingId(null);
-    fetchWarehouses();
+    try {
+      editingId ? await updateWarehouse(editingId, form) : await createWarehouse(form);
+      setModalOpen(false);
+      setForm(emptyForm);
+      setEditingId(null);
+      fetchWarehouses();
+    } catch (err) {
+      setError(err.response?.status === 403 ? deniedMessage : "Gudang gagal disimpan.");
+    }
   };
 
   const handleEdit = (warehouse) => {
@@ -39,42 +64,75 @@ export default function WarehousesPage() {
       location: warehouse.location || "",
       description: warehouse.description || "",
     });
+    setModalOpen(true);
   };
 
   const handleDelete = async (id) => {
     if (!confirm("Hapus gudang ini?")) return;
-    await deleteWarehouse(id);
-    fetchWarehouses();
+    try {
+      await deleteWarehouse(id);
+      fetchWarehouses();
+    } catch (err) {
+      setError(err.response?.status === 403 ? deniedMessage : "Gudang gagal dihapus.");
+    }
   };
 
   return (
-    <div className="app-shell">
-      <AppNav />
-      <main className="content">
-        <div className="page-header"><div><h1>Warehouses</h1><p>Kelola gudang penyimpanan stok.</p></div></div>
-        <section className="panel">
-          <form className="form-grid" onSubmit={handleSubmit}>
-            <input placeholder="Nama gudang" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
-            <input placeholder="Lokasi" value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} />
-            <input placeholder="Deskripsi" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
-            <button type="submit">{editingId ? "Update Warehouse" : "Add Warehouse"}</button>
-            {editingId && <button className="secondary" type="button" onClick={() => { setEditingId(null); setForm(emptyForm); }}>Cancel</button>}
-          </form>
+    <DashboardLayout title="Manajemen Gudang" subtitle="Distribusi regional" onRefresh={fetchWarehouses}>
+      {error && <Alert message={error} onClose={() => setError("")} />}
+      <div className="ss-page-head">
+        <div>
+          <h1>Gudang</h1>
+          <p>Kelola gudang penyimpanan stok.</p>
+        </div>
+        {canManage && <button className="ss-primary" onClick={openCreate}>
+          <span className="material-symbols-outlined">add</span>
+          Tambah Gudang
+        </button>}
+      </div>
+
+      <div className="ss-grid-2">
+        <section className="ss-card">
+          <h2>Distribusi Regional</h2>
+          <div className="ss-map">
+            <span className="ss-marker" style={{ left: "20%", top: "40%" }} />
+            <span className="ss-marker" style={{ left: "52%", top: "62%", background: "#ba1a1a" }} />
+            <span className="ss-marker" style={{ left: "72%", top: "35%" }} />
+          </div>
         </section>
-        <section className="panel">
-          <table>
-            <thead><tr><th>Name</th><th>Location</th><th>Description</th><th>Action</th></tr></thead>
-            <tbody>
-              {warehouses.map((warehouse) => (
-                <tr key={warehouse.id}>
-                  <td>{warehouse.name}</td><td>{warehouse.location}</td><td>{warehouse.description}</td>
-                  <td className="actions"><button onClick={() => handleEdit(warehouse)}>Edit</button><button className="danger" onClick={() => handleDelete(warehouse.id)}>Delete</button></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <section className="ss-card">
+          <h2>Daftar Gudang</h2>
+          <DataTable
+            columns={[
+              { key: "name", label: "Nama" },
+              { key: "location", label: "Lokasi", render: (row) => row.location || "-" },
+              {
+                key: "actions",
+                label: "Aksi",
+                render: (row) => canManage ? (
+                  <div className="ss-actions">
+                    <button className="ss-secondary" onClick={() => handleEdit(row)}>Ubah</button>
+                    <button className="ss-danger" onClick={() => handleDelete(row.id)}>Hapus</button>
+                  </div>
+                ) : "-",
+              },
+            ]}
+            rows={warehouses}
+          />
         </section>
-      </main>
-    </div>
+      </div>
+
+      {modalOpen && (
+        <Modal title={editingId ? "Ubah Gudang" : "Tambah Gudang"} onClose={() => setModalOpen(false)}>
+          <WarehouseForm
+            form={form}
+            setForm={setForm}
+            editingId={editingId}
+            onSubmit={handleSubmit}
+            onCancel={() => setModalOpen(false)}
+          />
+        </Modal>
+      )}
+    </DashboardLayout>
   );
 }
