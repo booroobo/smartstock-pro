@@ -65,6 +65,8 @@ class WarehouseController extends Controller
             'action' => $action,
             'table_name' => 'warehouses',
             'record_id' => $warehouse->id,
+            'description' => ucfirst($action) . ' gudang ' . $warehouse->name,
+            'ip_address' => $request->ip(),
             'old_values' => $oldValues,
             'new_values' => $newValues,
         ]);

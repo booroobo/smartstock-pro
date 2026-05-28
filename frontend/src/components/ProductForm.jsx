@@ -1,4 +1,4 @@
-export default function ProductForm({ form, setForm, categories, onSubmit, onCancel, editingId, imagePreview }) {
+export default function ProductForm({ form, setForm, categories, suppliers = [], onSubmit, onCancel, editingId, imagePreview }) {
   return (
     <form className="ss-form-grid" onSubmit={onSubmit}>
       <label>
@@ -6,6 +6,13 @@ export default function ProductForm({ form, setForm, categories, onSubmit, onCan
         <select value={form.product_category_id} onChange={(e) => setForm({ ...form, product_category_id: e.target.value })} required>
           <option value="">Pilih kategori</option>
           {categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
+        </select>
+      </label>
+      <label>
+        Supplier
+        <select value={form.supplier_id} onChange={(e) => setForm({ ...form, supplier_id: e.target.value })}>
+          <option value="">Tanpa supplier</option>
+          {suppliers.map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.name}</option>)}
         </select>
       </label>
       <label>

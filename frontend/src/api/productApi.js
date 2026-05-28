@@ -1,6 +1,6 @@
 import axiosClient from "./axiosClient";
 
-export const getProducts = () => axiosClient.get("/products");
+export const getProducts = (params = {}) => axiosClient.get("/products", { params });
 
 export const createProduct = (data) =>
   axiosClient.post("/products", data, {

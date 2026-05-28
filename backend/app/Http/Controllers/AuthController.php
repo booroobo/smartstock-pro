@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\User;
+use App\Models\AuditLog;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
@@ -14,7 +15,7 @@ class AuthController extends Controller
         $validated = $request->validate([
             'name' => 'required|string|max:100',
             'email' => 'required|string|email|max:150|unique:users,email',
-            'password' => 'required|string|min:6|confirmed',
+            'password' => ['required', 'string', 'min:8', 'confirmed', 'regex:/[A-Za-z]/', 'regex:/[0-9]/'],
             'role' => 'nullable|in:admin,warehouse_manager,staff,viewer',
         ]);
 
@@ -26,6 +27,15 @@ class AuthController extends Controller
         ]);
 
         $token = $user->createToken('auth_token')->plainTextToken;
+
+        AuditLog::create([
+            'user_id' => $user->id,
+            'action' => 'login',
+            'table_name' => 'auth',
+            'record_id' => $user->id,
+            'description' => 'User login ke SmartStock Pro',
+            'ip_address' => $request->ip(),
+        ]);
 
         return response()->json([
             'success' => true,
@@ -54,6 +64,15 @@ class AuthController extends Controller
 
         $token = $user->createToken('auth_token')->plainTextToken;
 
+        AuditLog::create([
+            'user_id' => $user->id,
+            'action' => 'login',
+            'table_name' => 'auth',
+            'record_id' => $user->id,
+            'description' => 'User login ke SmartStock Pro',
+            'ip_address' => $request->ip(),
+        ]);
+
         return response()->json([
             'success' => true,
             'message' => 'Login berhasil',
@@ -66,6 +85,15 @@ class AuthController extends Controller
 
     public function logout(Request $request)
     {
+        AuditLog::create([
+            'user_id' => $request->user()->id,
+            'action' => 'logout',
+            'table_name' => 'auth',
+            'record_id' => $request->user()->id,
+            'description' => 'User logout dari SmartStock Pro',
+            'ip_address' => $request->ip(),
+        ]);
+
         $request->user()->currentAccessToken()->delete();
 
         return response()->json([

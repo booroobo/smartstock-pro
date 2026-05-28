@@ -16,7 +16,18 @@ import {
 import { canUseStockTransactions, deniedMessage, displayStockType } from "../utils/roles";
 
 const today = () => new Date().toISOString().slice(0, 10);
-const emptyFilters = { start_date: "", end_date: "", type: "", product_id: "", warehouse_id: "" };
+const emptyFilters = {
+  search: "",
+  start_date: "",
+  end_date: "",
+  type: "",
+  product_id: "",
+  warehouse_id: "",
+  sort_by: "created_at",
+  sort_direction: "desc",
+  page: 1,
+  per_page: 10,
+};
 const emptyForm = { product_id: "", warehouse_id: "", type: "stock_in", quantity: "", notes: "", transaction_date: today() };
 
 export default function StockTransactionsPage() {
@@ -28,6 +39,7 @@ export default function StockTransactionsPage() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [filters, setFilters] = useState(emptyFilters);
+  const [pagination, setPagination] = useState({ current_page: 1, last_page: 1, total: 0 });
   const [form, setForm] = useState(emptyForm);
   const [editingId, setEditingId] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
@@ -35,13 +47,20 @@ export default function StockTransactionsPage() {
   const fetchData = async (params = filters) => {
     try {
       const [productResponse, warehouseResponse, transactionResponse] = await Promise.all([
-        getProducts(),
+        getProducts({ per_page: 100, sort_by: "name", sort_direction: "asc" }),
         getWarehouses(),
         getTransactions(params),
       ]);
-      setProducts(productResponse.data.data);
+      const productPayload = productResponse.data.data;
+      setProducts(productPayload.data || productPayload);
       setWarehouses(warehouseResponse.data.data);
-      setTransactions(transactionResponse.data.data);
+      const payload = transactionResponse.data.data;
+      setTransactions(payload.data || payload);
+      setPagination({
+        current_page: payload.current_page || 1,
+        last_page: payload.last_page || 1,
+        total: payload.total || (payload.data || payload).length,
+      });
     } catch (err) {
       setError(err.response?.status === 403 ? deniedMessage : "Data transaksi stok gagal dimuat.");
     }
@@ -90,12 +109,20 @@ export default function StockTransactionsPage() {
 
   const applyFilters = (e) => {
     e.preventDefault();
-    fetchData(filters);
+    const next = { ...filters, page: 1 };
+    setFilters(next);
+    fetchData(next);
   };
 
   const resetFilters = () => {
     setFilters(emptyFilters);
     fetchData(emptyFilters);
+  };
+
+  const goToPage = (page) => {
+    const next = { ...filters, page };
+    setFilters(next);
+    fetchData(next);
   };
 
   const handleDelete = async (id) => {
@@ -133,6 +160,7 @@ export default function StockTransactionsPage() {
       <section className="ss-card">
         <h2>Filter</h2>
         <form className="ss-form-grid" onSubmit={applyFilters}>
+          <label>Cari<input value={filters.search} onChange={(e) => setFilters({ ...filters, search: e.target.value })} placeholder="Produk, SKU, catatan, atau ID" /></label>
           <label>Tanggal Mulai<input type="date" value={filters.start_date} onChange={(e) => setFilters({ ...filters, start_date: e.target.value })} /></label>
           <label>Tanggal Selesai<input type="date" value={filters.end_date} onChange={(e) => setFilters({ ...filters, end_date: e.target.value })} /></label>
           <label>
@@ -153,6 +181,30 @@ export default function StockTransactionsPage() {
             <select value={filters.warehouse_id} onChange={(e) => setFilters({ ...filters, warehouse_id: e.target.value })}>
               <option value="">Semua gudang</option>
               {warehouses.map((warehouse) => <option key={warehouse.id} value={warehouse.id}>{warehouse.name}</option>)}
+            </select>
+          </label>
+          <label>
+            Urutkan
+            <select value={filters.sort_by} onChange={(e) => setFilters({ ...filters, sort_by: e.target.value })}>
+              <option value="created_at">Tanggal dibuat</option>
+              <option value="transaction_date">Tanggal transaksi</option>
+              <option value="quantity">Jumlah</option>
+              <option value="type">Tipe</option>
+            </select>
+          </label>
+          <label>
+            Arah
+            <select value={filters.sort_direction} onChange={(e) => setFilters({ ...filters, sort_direction: e.target.value })}>
+              <option value="desc">Terbaru/Tertinggi</option>
+              <option value="asc">Terlama/Terendah</option>
+            </select>
+          </label>
+          <label>
+            Per Halaman
+            <select value={filters.per_page} onChange={(e) => setFilters({ ...filters, per_page: Number(e.target.value) })}>
+              <option value="10">10</option>
+              <option value="25">25</option>
+              <option value="50">50</option>
             </select>
           </label>
           <div className="ss-form-actions">
@@ -184,6 +236,11 @@ export default function StockTransactionsPage() {
           ]}
           rows={transactions}
         />
+        <div className="ss-pagination">
+          <button className="ss-secondary" disabled={pagination.current_page <= 1} onClick={() => goToPage(pagination.current_page - 1)}>Sebelumnya</button>
+          <span>Halaman {pagination.current_page} dari {pagination.last_page} ({pagination.total} data)</span>
+          <button className="ss-secondary" disabled={pagination.current_page >= pagination.last_page} onClick={() => goToPage(pagination.current_page + 1)}>Berikutnya</button>
+        </div>
       </section>
 
       {modalOpen && (

@@ -87,6 +87,8 @@ class CategoryController extends Controller
             'action' => $action,
             'table_name' => 'product_categories',
             'record_id' => $category->id,
+            'description' => ucfirst($action) . ' kategori produk ' . $category->name,
+            'ip_address' => $request->ip(),
             'old_values' => $oldValues,
             'new_values' => $newValues,
         ]);

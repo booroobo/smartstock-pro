@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\StockTransaction;
+use App\Models\AuditLog;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -25,6 +26,19 @@ class ReportController extends Controller
         }
 
         $transactions = $query->orderByDesc('transaction_date')->get();
+
+        AuditLog::create([
+            'user_id' => $request->user()?->id,
+            'action' => 'export',
+            'table_name' => 'reports',
+            'record_id' => null,
+            'description' => 'Export laporan transaksi stok ke CSV',
+            'ip_address' => $request->ip(),
+            'new_values' => [
+                'filters' => $request->only(['start_date', 'end_date', 'type']),
+                'total_rows' => $transactions->count(),
+            ],
+        ]);
 
         return response()->streamDownload(function () use ($transactions) {
             $handle = fopen('php://output', 'w');

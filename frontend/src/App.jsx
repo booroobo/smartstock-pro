@@ -14,6 +14,7 @@ import AuditLogsPage from "./pages/AuditLogsPage";
 import ImportDataPage from "./pages/ImportDataPage";
 import QueueJobsPage from "./pages/QueueJobsPage";
 import RoleAccessPage from "./pages/RoleAccessPage";
+import SessionTimeout from "./components/SessionTimeout";
 
 export default function App() {
   return (
@@ -131,6 +132,7 @@ export default function App() {
               }
             />
         </Routes>
+        <SessionTimeout />
       </BrowserRouter>
     </AuthProvider>
   );

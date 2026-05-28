@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\AuditLog;
+use App\Models\ErrorLog;
 use App\Models\Product;
 use App\Models\StockTransaction;
 use App\Models\Warehouse;
@@ -13,7 +14,25 @@ class TransactionController extends Controller
 {
     public function index(Request $request)
     {
+        $perPage = min((int) $request->input('per_page', 10), 100);
+        $sortBy = in_array($request->input('sort_by'), ['transaction_date', 'quantity', 'type', 'created_at'], true)
+            ? $request->input('sort_by')
+            : 'created_at';
+        $sortDirection = strtolower($request->input('sort_direction')) === 'asc' ? 'asc' : 'desc';
+
         $query = StockTransaction::with(['product.category', 'warehouse', 'user']);
+
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $query->where(function ($q) use ($search) {
+                $q->where('notes', 'like', "%{$search}%")
+                    ->orWhere('id', $search)
+                    ->orWhereHas('product', function ($productQuery) use ($search) {
+                        $productQuery->where('name', 'like', "%{$search}%")
+                            ->orWhere('sku', 'like', "%{$search}%");
+                    });
+            });
+        }
 
         if ($request->filled('type')) {
             $query->where('type', $request->type);
@@ -35,7 +54,7 @@ class TransactionController extends Controller
             $query->whereDate('transaction_date', '<=', $request->end_date);
         }
 
-        $transactions = $query->latest()->get();
+        $transactions = $query->orderBy($sortBy, $sortDirection)->paginate($perPage);
 
         return response()->json([
             'success' => true,
@@ -146,6 +165,19 @@ class TransactionController extends Controller
     private function applyStock(Product $product, string $type, int $quantity): void
     {
         if ($type === 'stock_out' && $product->current_stock < $quantity) {
+            ErrorLog::create([
+                'severity' => 'warning',
+                'source' => 'stock_transactions.stock_out',
+                'message' => 'Stok produk tidak mencukupi untuk transaksi stok keluar.',
+                'context' => [
+                    'product_id' => $product->id,
+                    'product_name' => $product->name,
+                    'current_stock' => $product->current_stock,
+                    'requested_quantity' => $quantity,
+                ],
+                'user_id' => request()->user()?->id,
+                'ip_address' => request()->ip(),
+            ]);
             abort(422, 'Stok produk tidak mencukupi.');
         }
 
@@ -170,6 +202,8 @@ class TransactionController extends Controller
             'action' => $action,
             'table_name' => 'stock_transactions',
             'record_id' => $transaction->id,
+            'description' => ucfirst($action) . ' transaksi stok #' . $transaction->id,
+            'ip_address' => $request->ip(),
             'old_values' => $oldValues,
             'new_values' => $newValues,
         ]);

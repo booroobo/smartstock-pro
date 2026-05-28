@@ -11,6 +11,8 @@ use App\Http\Controllers\ProductController;
 use App\Http\Controllers\WarehouseController;
 use App\Http\Controllers\AuditLogController;
 use App\Http\Controllers\SupplierController;
+use App\Http\Controllers\NotificationController;
+use App\Http\Controllers\ErrorLogController;
 
 Route::get('/health', [HealthCheckController::class, 'index']);
 
@@ -24,6 +26,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::middleware('role:admin,warehouse_manager,staff,viewer')->group(function () {
         Route::get('/dashboard', [DashboardController::class, 'index']);
         Route::get('/reports/export', [ReportController::class, 'export']);
+        Route::get('/notifications/critical-stock', [NotificationController::class, 'criticalStock']);
+        Route::get('/stock-transactions', [TransactionController::class, 'index']);
     });
 
     Route::middleware('role:admin,warehouse_manager,staff')->group(function () {
@@ -53,5 +57,6 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::apiResource('/warehouses', WarehouseController::class)->except(['index', 'show']);
         Route::apiResource('/suppliers', SupplierController::class);
         Route::get('/audit-logs', [AuditLogController::class, 'index']);
+        Route::get('/error-logs', [ErrorLogController::class, 'index']);
     });
 });
