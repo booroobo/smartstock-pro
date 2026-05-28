@@ -32,6 +32,10 @@ export default function ProductForm({ form, setForm, categories, suppliers = [],
         <input type="number" min="0" value={form.minimum_stock} onChange={(e) => setForm({ ...form, minimum_stock: e.target.value })} required />
       </label>
       <label>
+        Harga Satuan
+        <input type="number" min="0" step="0.01" value={form.unit_price} onChange={(e) => setForm({ ...form, unit_price: e.target.value })} placeholder="0" />
+      </label>
+      <label>
         Gambar Produk
         <input type="file" accept="image/png,image/jpeg" onChange={(e) => setForm({ ...form, image: e.target.files[0] || null })} />
       </label>

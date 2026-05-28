@@ -9,7 +9,7 @@ class Warehouse extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['user_id', 'name', 'location', 'description'];
+    protected $fillable = ['user_id', 'name', 'location', 'latitude', 'longitude', 'description'];
 
     public function user()
     {
@@ -19,5 +19,10 @@ class Warehouse extends Model
     public function stockTransactions()
     {
         return $this->hasMany(StockTransaction::class);
+    }
+
+    public function warehouseStocks()
+    {
+        return $this->hasMany(WarehouseStock::class);
     }
 }

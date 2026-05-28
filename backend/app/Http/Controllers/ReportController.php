@@ -42,7 +42,7 @@ class ReportController extends Controller
 
         return response()->streamDownload(function () use ($transactions) {
             $handle = fopen('php://output', 'w');
-            fputcsv($handle, ['Tanggal', 'Produk', 'Kategori', 'Gudang', 'Tipe', 'Quantity', 'Catatan']);
+            fputcsv($handle, ['Tanggal', 'Produk', 'Kategori', 'Gudang', 'Tipe', 'Quantity', 'Harga Satuan', 'Nilai Total', 'Catatan']);
 
             foreach ($transactions as $transaction) {
                 fputcsv($handle, [
@@ -52,6 +52,8 @@ class ReportController extends Controller
                     $transaction->warehouse?->name,
                     $transaction->type,
                     $transaction->quantity,
+                    $transaction->product?->unit_price ?? 0,
+                    (float) (($transaction->product?->unit_price ?? 0) * $transaction->quantity),
                     $transaction->notes,
                 ]);
             }

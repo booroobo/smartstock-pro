@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import DashboardLayout from "../components/DashboardLayout";
 import DataTable from "../components/DataTable";
 import Modal from "../components/Modal";
@@ -19,12 +19,26 @@ const emptyForm = {
   name: "",
   description: "",
   minimum_stock: 0,
+  unit_price: 0,
   unit: "pcs",
   image: null,
 };
 
+const formatRupiah = (value) =>
+  new Intl.NumberFormat("id-ID", {
+    style: "currency",
+    currency: "IDR",
+    maximumFractionDigits: 0,
+  }).format(Number(value || 0));
+
+const getWarehouseStocks = (product) => product.warehouse_stocks || [];
+
+const getWarehouseStockTotal = (product) =>
+  getWarehouseStocks(product).reduce((total, stock) => total + Number(stock.quantity || 0), 0);
+
 export default function ProductsPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { user } = useAuth();
   const canManage = canManageMasterData(user?.role);
   const [categories, setCategories] = useState([]);
@@ -46,6 +60,7 @@ export default function ProductsPage() {
   const [form, setForm] = useState(emptyForm);
   const [editingId, setEditingId] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
+  const [stockDetailProduct, setStockDetailProduct] = useState(null);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
 
@@ -78,9 +93,14 @@ export default function ProductsPage() {
   };
 
   useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const searchFromUrl = params.get("search") || "";
+    const nextFilters = searchFromUrl ? { ...filters, search: searchFromUrl, page: 1 } : filters;
+    if (searchFromUrl) setFilters(nextFilters);
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    fetchData();
-  }, []);
+    fetchData(nextFilters);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.search]);
 
   const openCreate = () => {
     setEditingId(null);
@@ -121,6 +141,7 @@ export default function ProductsPage() {
       name: product.name,
       description: product.description || "",
       minimum_stock: product.minimum_stock,
+      unit_price: product.unit_price || 0,
       unit: product.unit || "pcs",
       image: null,
     });
@@ -237,6 +258,7 @@ export default function ProductsPage() {
               <option value="sku">SKU</option>
               <option value="current_stock">Stok saat ini</option>
               <option value="minimum_stock">Stok minimum</option>
+              <option value="unit_price">Harga satuan</option>
             </select>
           </label>
           <label>
@@ -277,6 +299,8 @@ export default function ProductsPage() {
             { key: "sku", label: "SKU", render: (row) => row.sku || "-" },
             { key: "category", label: "Kategori", render: (row) => row.category?.name || "-" },
             { key: "supplier", label: "Supplier", render: (row) => row.supplier?.name || "-" },
+            { key: "unit_price", label: "Harga Satuan", render: (row) => formatRupiah(row.unit_price) },
+            { key: "stock_value", label: "Nilai Stok", render: (row) => formatRupiah(Number(row.current_stock || 0) * Number(row.unit_price || 0)) },
             {
               key: "stock",
               label: "Level Stok",
@@ -287,6 +311,24 @@ export default function ProductsPage() {
                   <div className="ss-progress">
                     <div className="ss-progress-track"><div className={`ss-progress-bar ${tone}`} style={{ width: `${pct}%` }} /></div>
                     <small>{row.current_stock} {row.unit}</small>
+                  </div>
+                );
+              },
+            },
+            {
+              key: "warehouse_stocks",
+              label: "Stok Gudang",
+              render: (row) => {
+                const warehouseCount = getWarehouseStocks(row).length;
+                const totalStock = getWarehouseStockTotal(row);
+
+                return (
+                  <div className="ss-warehouse-stock-summary">
+                    <strong>{warehouseCount} Gudang</strong>
+                    <span>Total: {totalStock}</span>
+                    <button className="ss-secondary" type="button" onClick={() => setStockDetailProduct(row)}>
+                      Lihat Detail
+                    </button>
                   </div>
                 );
               },
@@ -328,6 +370,39 @@ export default function ProductsPage() {
             onSubmit={handleSubmit}
             onCancel={() => setModalOpen(false)}
           />
+        </Modal>
+      )}
+
+      {stockDetailProduct && (
+        <Modal title={`Detail Stok Gudang - ${stockDetailProduct.name}`} onClose={() => setStockDetailProduct(null)}>
+          <div className="ss-stock-detail">
+            {getWarehouseStocks(stockDetailProduct).length ? (
+              <div className="ss-table-wrap ss-stock-detail-table">
+                <table className="ss-table">
+                  <thead>
+                    <tr>
+                      <th>Gudang</th>
+                      <th>Jumlah Stok</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {getWarehouseStocks(stockDetailProduct).map((stock, index) => (
+                      <tr key={stock.id || stock.warehouse_id || index}>
+                        <td>{stock.warehouse?.name || "-"}</td>
+                        <td>{stock.quantity}</td>
+                      </tr>
+                    ))}
+                    <tr className="ss-stock-detail-total">
+                      <td>Total</td>
+                      <td>{getWarehouseStockTotal(stockDetailProduct)}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <p className="ss-stock-detail-empty">Belum ada stok gudang.</p>
+            )}
+          </div>
         </Modal>
       )}
     </DashboardLayout>

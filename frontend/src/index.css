@@ -591,7 +591,16 @@ button {
   margin-top: 6px;
   color: var(--ss-primary);
   font-family: "Plus Jakarta Sans", Inter, sans-serif;
-  font-size: 30px;
+  font-size: clamp(20px, 2vw, 30px);
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.ss-inventory-value-card strong {
+  max-width: 100%;
+  font-size: clamp(16px, 1.45vw, 24px);
+  line-height: 1.2;
 }
 
 .ss-table-wrap {
@@ -719,6 +728,34 @@ button:disabled {
   background: var(--ss-error);
 }
 
+.ss-warehouse-stock-summary {
+  display: grid;
+  gap: 6px;
+  width: max-content;
+  min-width: 130px;
+}
+
+.ss-warehouse-stock-summary strong,
+.ss-warehouse-stock-summary span {
+  line-height: 1.35;
+}
+
+.ss-warehouse-stock-summary strong {
+  color: var(--ss-primary);
+}
+
+.ss-warehouse-stock-summary span {
+  color: var(--ss-secondary);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.ss-warehouse-stock-summary button {
+  min-height: 32px;
+  padding: 7px 10px;
+  justify-self: start;
+}
+
 .ss-form-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -766,6 +803,17 @@ button:disabled {
   margin-left: auto;
 }
 
+.ss-code-block {
+  overflow-x: auto;
+  border: 1px solid var(--ss-border);
+  border-radius: 8px;
+  padding: 14px;
+  background: var(--ss-surface-low);
+  color: var(--ss-primary);
+  font-family: Consolas, "Courier New", monospace;
+  font-size: 13px;
+}
+
 .alert-error {
   padding: 10px;
   background: #fee2e2;
@@ -776,7 +824,7 @@ button:disabled {
 
 .ss-modal-backdrop {
   position: fixed;
-  z-index: 50;
+  z-index: 2000;
   inset: 0;
   display: grid;
   place-items: center;
@@ -812,6 +860,33 @@ button:disabled {
   padding: 20px;
 }
 
+.ss-stock-detail {
+  display: grid;
+  gap: 14px;
+}
+
+.ss-stock-detail-table {
+  margin: 0;
+  border: 1px solid var(--ss-border);
+  border-radius: 8px;
+}
+
+.ss-stock-detail-total td {
+  color: var(--ss-primary);
+  background: var(--ss-surface-low);
+  font-weight: 800;
+}
+
+.ss-stock-detail-empty {
+  margin: 0;
+  border: 1px dashed var(--ss-border);
+  border-radius: 8px;
+  padding: 18px;
+  color: var(--ss-secondary);
+  text-align: center;
+  font-weight: 700;
+}
+
 .ss-session-warning p {
   margin-top: 0;
   color: var(--ss-secondary);
@@ -819,6 +894,82 @@ button:disabled {
 
 .ss-chart {
   height: 320px;
+}
+
+.ss-chart.compact-chart {
+  height: 240px;
+}
+
+.ss-leaflet-map {
+  position: relative;
+  min-height: 360px;
+  overflow: hidden;
+  border: 1px solid var(--ss-border);
+  border-radius: 12px;
+}
+
+.ss-leaflet-inner {
+  height: 360px;
+  width: 100%;
+}
+
+.ss-map-empty {
+  position: absolute;
+  inset: auto 16px 16px 16px;
+  z-index: 500;
+  border-radius: 8px;
+  padding: 10px 12px;
+  color: var(--ss-secondary);
+  background: rgba(255, 255, 255, 0.92);
+  font-weight: 700;
+}
+
+.ss-warehouse-marker {
+  width: 34px !important;
+  height: 34px !important;
+  display: grid;
+  place-items: center;
+  border: 3px solid #fff;
+  border-radius: 999px;
+  color: #fff;
+  background: var(--ss-primary);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.32);
+}
+
+.ss-warehouse-marker .material-symbols-outlined {
+  font-size: 18px;
+}
+
+.ss-location-picker {
+  display: grid;
+  gap: 8px;
+}
+
+.ss-location-picker-inner {
+  width: 100%;
+  height: 280px;
+  overflow: hidden;
+  border: 1px solid var(--ss-border);
+  border-radius: 10px;
+}
+
+.ss-location-picker p {
+  margin: 0;
+  color: var(--ss-secondary);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.ss-location-picker-marker {
+  display: grid;
+  place-items: center;
+  color: var(--ss-error);
+  filter: drop-shadow(0 8px 14px rgba(15, 23, 42, 0.28));
+}
+
+.ss-location-picker-marker .material-symbols-outlined {
+  font-size: 36px;
+  font-variation-settings: "FILL" 1;
 }
 
 .ss-map {
@@ -900,7 +1051,7 @@ button:disabled {
 
 .print-summary {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 10px;
   margin: 18px 0;
 }
@@ -928,6 +1079,14 @@ button:disabled {
   background: var(--ss-surface-mid);
 }
 
+.print-footer {
+  border-top: 1px solid var(--ss-border);
+  margin-top: 24px;
+  padding-top: 10px;
+  color: var(--ss-secondary);
+  font-size: 12px;
+}
+
 @media print {
   .ss-sidebar,
   .ss-navbar,
@@ -949,11 +1108,20 @@ button:disabled {
     display: block;
     box-shadow: none;
     border: 0;
+    padding: 24px;
   }
 
   .print-report,
   .print-report * {
     color: #111 !important;
+  }
+
+  .print-table th {
+    background: #e5e7eb !important;
+  }
+
+  .print-table tr {
+    break-inside: avoid;
   }
 }
 

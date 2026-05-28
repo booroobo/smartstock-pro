@@ -3,6 +3,7 @@ import DashboardLayout from "../components/DashboardLayout";
 import DataTable from "../components/DataTable";
 import Modal from "../components/Modal";
 import WarehouseForm from "../components/WarehouseForm";
+import WarehouseMap from "../components/WarehouseMap";
 import Alert from "../components/Alert";
 import { useAuth } from "../contexts/AuthContext";
 import { canManageMasterData, deniedMessage } from "../utils/roles";
@@ -13,7 +14,7 @@ import {
   updateWarehouse,
 } from "../api/warehouseApi";
 
-const emptyForm = { name: "", location: "", description: "" };
+const emptyForm = { name: "", location: "", latitude: "", longitude: "", description: "" };
 
 export default function WarehousesPage() {
   const { user } = useAuth();
@@ -62,6 +63,8 @@ export default function WarehousesPage() {
     setForm({
       name: warehouse.name,
       location: warehouse.location || "",
+      latitude: warehouse.latitude || "",
+      longitude: warehouse.longitude || "",
       description: warehouse.description || "",
     });
     setModalOpen(true);
@@ -93,12 +96,8 @@ export default function WarehousesPage() {
 
       <div className="ss-grid-2">
         <section className="ss-card">
-          <h2>Distribusi Regional</h2>
-          <div className="ss-map">
-            <span className="ss-marker" style={{ left: "20%", top: "40%" }} />
-            <span className="ss-marker" style={{ left: "52%", top: "62%", background: "#ba1a1a" }} />
-            <span className="ss-marker" style={{ left: "72%", top: "35%" }} />
-          </div>
+          <h2>Peta Lokasi Gudang</h2>
+          <WarehouseMap warehouses={warehouses} />
         </section>
         <section className="ss-card">
           <h2>Daftar Gudang</h2>
@@ -106,6 +105,7 @@ export default function WarehousesPage() {
             columns={[
               { key: "name", label: "Nama" },
               { key: "location", label: "Lokasi", render: (row) => row.location || "-" },
+              { key: "coordinates", label: "Koordinat", render: (row) => row.latitude && row.longitude ? `${row.latitude}, ${row.longitude}` : "-" },
               {
                 key: "actions",
                 label: "Aksi",

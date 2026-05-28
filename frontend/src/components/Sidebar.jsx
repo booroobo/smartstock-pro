@@ -12,6 +12,7 @@ const mainItems = [
   { path: "/warehouses", icon: "warehouse", label: "Gudang", roles: ["admin", "warehouse_manager"] },
   { path: "/suppliers", icon: "local_shipping", label: "Supplier", roles: ["admin", "warehouse_manager"] },
   { path: "/stock-transactions", icon: "receipt_long", label: "Transaksi Stok", roles: ["admin", "warehouse_manager", "staff"] },
+  { path: "/stock-transfers", icon: "sync_alt", label: "Transfer Stok", roles: ["admin", "warehouse_manager", "staff"] },
   { path: "/reports", icon: "analytics", label: "Laporan", roles: ["admin", "warehouse_manager", "staff", "viewer"] },
 ];
 

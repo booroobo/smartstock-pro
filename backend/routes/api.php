@@ -13,6 +13,10 @@ use App\Http\Controllers\AuditLogController;
 use App\Http\Controllers\SupplierController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\ErrorLogController;
+use App\Http\Controllers\ImportController;
+use App\Http\Controllers\ReportJobController;
+use App\Http\Controllers\StockTransferController;
+use App\Http\Controllers\UserController;
 
 Route::get('/health', [HealthCheckController::class, 'index']);
 
@@ -26,8 +30,13 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::middleware('role:admin,warehouse_manager,staff,viewer')->group(function () {
         Route::get('/dashboard', [DashboardController::class, 'index']);
         Route::get('/reports/export', [ReportController::class, 'export']);
+        Route::get('/reports/jobs', [ReportJobController::class, 'jobs']);
+        Route::get('/reports/jobs/{reportJob}', [ReportJobController::class, 'showJob']);
+        Route::get('/reports/jobs/{reportJob}/download', [ReportJobController::class, 'download']);
         Route::get('/notifications/critical-stock', [NotificationController::class, 'criticalStock']);
         Route::get('/stock-transactions', [TransactionController::class, 'index']);
+        Route::get('/stock-transfers', [StockTransferController::class, 'index']);
+        Route::get('/stock-transfers/{stockTransfer}', [StockTransferController::class, 'show']);
     });
 
     Route::middleware('role:admin,warehouse_manager,staff')->group(function () {
@@ -35,6 +44,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::apiResource('/stock-transactions', TransactionController::class)->parameters([
             'stock-transactions' => 'transaction',
         ]);
+        Route::post('/stock-transfers', [StockTransferController::class, 'store']);
 
         Route::get('/products', [ProductController::class, 'index']);
         Route::get('/products/{product}', [ProductController::class, 'show']);
@@ -57,6 +67,13 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::apiResource('/warehouses', WarehouseController::class)->except(['index', 'show']);
         Route::apiResource('/suppliers', SupplierController::class);
         Route::get('/audit-logs', [AuditLogController::class, 'index']);
+        Route::get('/error-logs/summary', [ErrorLogController::class, 'summary']);
         Route::get('/error-logs', [ErrorLogController::class, 'index']);
+        Route::post('/import/products', [ImportController::class, 'importProducts']);
+        Route::get('/import/jobs', [ImportController::class, 'jobs']);
+        Route::get('/import/jobs/{importJob}', [ImportController::class, 'showJob']);
+        Route::post('/reports/generate', [ReportJobController::class, 'generate']);
+        Route::get('/users', [UserController::class, 'index'])->middleware('role:admin');
+        Route::put('/users/{user}/role', [UserController::class, 'updateRole'])->middleware('role:admin');
     });
 });

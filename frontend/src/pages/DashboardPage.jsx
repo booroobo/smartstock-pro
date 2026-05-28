@@ -16,6 +16,13 @@ import Alert from "../components/Alert";
 import { getDashboard } from "../api/dashboardApi";
 import { displayStockType } from "../utils/roles";
 
+const formatRupiah = (value) =>
+  new Intl.NumberFormat("id-ID", {
+    style: "currency",
+    currency: "IDR",
+    maximumFractionDigits: 0,
+  }).format(Number(value || 0));
+
 export default function DashboardPage() {
   const [dashboard, setDashboard] = useState(null);
   const [error, setError] = useState("");
@@ -62,6 +69,7 @@ export default function DashboardPage() {
         <SummaryCard label="Total Produk" value={dashboard?.total_products || 0} icon="inventory_2" hint="Aktif" />
         <SummaryCard label="Total Stok Masuk" value={dashboard?.total_stock_in || 0} icon="login" hint="Masuk" />
         <SummaryCard label="Total Stok Keluar" value={dashboard?.total_stock_out || 0} icon="logout" hint="Keluar" />
+        <SummaryCard className="ss-inventory-value-card" label="Nilai Inventaris" value={formatRupiah(dashboard?.total_inventory_value)} icon="payments" hint="Total nilai stok" />
         <SummaryCard label="Stok Kritis" value={criticalCount} icon="error" tone="danger" hint="Prioritas" />
       </section>
 
@@ -95,6 +103,19 @@ export default function DashboardPage() {
           />
         </section>
 
+        <section className="ss-card">
+          <h2>Stok Per Gudang</h2>
+          <DataTable
+            columns={[
+              { key: "warehouse", label: "Gudang" },
+              { key: "quantity", label: "Total Stok" },
+            ]}
+            rows={dashboard?.warehouse_stock_summary || []}
+          />
+        </section>
+      </div>
+
+      <div className="ss-grid-2">
         <section className="ss-card">
           <h2>Transaksi Stok Terbaru</h2>
           <DataTable

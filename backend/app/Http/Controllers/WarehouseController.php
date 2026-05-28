@@ -20,6 +20,8 @@ class WarehouseController extends Controller
         $validated = $request->validate([
             'name' => 'required|string|max:120',
             'location' => 'nullable|string|max:150',
+            'latitude' => 'nullable|numeric|between:-90,90',
+            'longitude' => 'nullable|numeric|between:-180,180',
             'description' => 'nullable|string',
         ]);
 
@@ -39,6 +41,8 @@ class WarehouseController extends Controller
         $validated = $request->validate([
             'name' => 'required|string|max:120',
             'location' => 'nullable|string|max:150',
+            'latitude' => 'nullable|numeric|between:-90,90',
+            'longitude' => 'nullable|numeric|between:-180,180',
             'description' => 'nullable|string',
         ]);
 

@@ -27,6 +27,7 @@ Sistem ini adalah **MVP**, sehingga beberapa fitur advanced masih berupa simulas
 | Routing Frontend | React Router DOM | Routing halaman dan protected route. |
 | HTTP Client | Axios | Komunikasi frontend ke Laravel REST API menggunakan Bearer Token. |
 | Chart | Recharts | Visualisasi chart stok pada dashboard. |
+| Map | Leaflet + React Leaflet | Peta lokasi gudang interaktif berdasarkan koordinat database. |
 | Backend | Laravel 10 REST API | API, validation, controller, middleware, Eloquent ORM. |
 | Authentication | Laravel Sanctum | Token-based authentication. |
 | Database | PostgreSQL | Penyimpanan data inventaris dan audit log. |
@@ -38,23 +39,37 @@ Sistem ini adalah **MVP**, sehingga beberapa fitur advanced masih berupa simulas
 - Login/logout menggunakan Laravel Sanctum.
 - Register publik dinonaktifkan karena akun bersifat internal perusahaan.
 - Multi-role access dengan middleware role.
+- Role Access UI Management untuk admin mengubah role user internal.
+- Session timeout otomatis pada frontend.
 - Password hashing menggunakan Laravel `Hash::make`.
 - CRUD produk.
 - CRUD kategori produk.
 - CRUD gudang.
 - CRUD supplier.
+- Search, filtering, sorting, dan pagination produk.
+- Search, filtering, sorting, dan pagination transaksi stok.
 - Transaksi stok masuk (`stock_in`).
 - Transaksi stok keluar (`stock_out`).
 - Update stok otomatis.
 - Edit dan delete transaksi stok dengan penyesuaian ulang stok.
+- Stok per gudang menggunakan tabel `warehouse_stocks`.
+- Transfer stok antar gudang menggunakan database transaction.
 - Dashboard inventaris.
 - Chart stok masuk/keluar per kategori.
+- Nilai inventaris berdasarkan `current_stock x unit_price`.
 - Critical stock alert berdasarkan minimum stock.
+- In-app notification stok kritis dari backend.
+- Peta gudang interaktif menggunakan Leaflet dan data koordinat gudang dari API.
 - Upload dan preview gambar produk.
 - Audit log aktivitas create/update/delete.
+- Error log dengan severity dan chart ringkasan severity.
+- Import CSV produk menggunakan Laravel Queue database.
+- Queue job status untuk import dan report job.
+- Status import job dan report job dapat dipantau dari frontend.
+- Background report generation untuk laporan stok besar.
 - Export CSV.
-- Export PDF sederhana menggunakan print browser.
-- Health check API dan database.
+- Export PDF visual menggunakan browser print.
+- Health check API dan database dengan response time, memory usage, memory peak, PHP version, server time, dan uptime status.
 - Data master bersifat company-wide/global.
 - Frontend menampilkan menu dan tombol sesuai role pengguna.
 
@@ -62,16 +77,14 @@ Sistem ini adalah **MVP**, sehingga beberapa fitur advanced masih berupa simulas
 
 Fitur berikut belum production-ready dan masih berupa simulasi MVP atau rancangan lanjutan:
 
-- Import CSV/Excel.
-- Queue jobs.
-- Monitoring resource advanced seperti CPU, memory, Disk IOPS, dan network.
-- Role access UI management.
-- Notifikasi real-time.
+- Import Excel.
+- Monitoring resource advanced seperti CPU, Disk IOPS, dan network.
+- WebSocket/push notification real-time.
 - Email notification.
-- Transfer stok antar gudang.
 - FIFO/LIFO batch layer.
-- Backend PDF generator dengan template visual lengkap.
-- Dashboard error log dengan severity.
+- Backend PDF generator dengan dependency berat.
+- Queue production setup yang lengkap, seperti service manager, retry policy, dan monitoring worker.
+- Sinkronisasi otomatis antar gudang secara enterprise.
 
 ## Role dan Hak Akses
 
@@ -209,10 +222,18 @@ Tabel utama:
 | `users` | Menyimpan akun internal dan role pengguna. |
 | `product_categories` | Menyimpan kategori produk. |
 | `products` | Menyimpan data produk, stok saat ini, stok minimum, dan gambar. |
-| `warehouses` | Menyimpan data gudang. |
+| `products.unit_price` | Harga satuan produk untuk menghitung nilai inventaris. |
+| `warehouses` | Menyimpan data gudang, lokasi, latitude, dan longitude. |
 | `suppliers` | Menyimpan data supplier. |
 | `stock_transactions` | Menyimpan transaksi stok masuk dan stok keluar. |
+| `warehouse_stocks` | Menyimpan quantity produk per gudang. |
+| `stock_transfers` | Menyimpan riwayat transfer stok antar gudang. |
 | `audit_logs` | Mencatat aktivitas pengguna. |
+| `error_logs` | Mencatat error/warning/info aplikasi beserta severity. |
+| `jobs` | Antrian Laravel Queue database. |
+| `failed_jobs` | Catatan job queue yang gagal. |
+| `import_jobs` | Status proses import CSV produk. |
+| `report_jobs` | Status proses generate laporan background. |
 | `personal_access_tokens` | Token Laravel Sanctum. |
 
 Relasi utama:
@@ -220,6 +241,11 @@ Relasi utama:
 - `products.product_category_id` → `product_categories.id`
 - `stock_transactions.product_id` → `products.id`
 - `stock_transactions.warehouse_id` → `warehouses.id`
+- `warehouse_stocks.product_id` → `products.id`
+- `warehouse_stocks.warehouse_id` → `warehouses.id`
+- `stock_transfers.product_id` → `products.id`
+- `stock_transfers.from_warehouse_id` → `warehouses.id`
+- `stock_transfers.to_warehouse_id` → `warehouses.id`
 - `stock_transactions.user_id` → `users.id` sebagai pencatat pembuat transaksi
 - `audit_logs.user_id` → `users.id` sebagai pencatat pelaku aktivitas
 
@@ -259,13 +285,28 @@ http://127.0.0.1:8000/api
 | POST | `/api/suppliers` | Ya | admin, warehouse_manager | Tambah supplier. |
 | PUT | `/api/suppliers/{supplier}` | Ya | admin, warehouse_manager | Ubah supplier. |
 | DELETE | `/api/suppliers/{supplier}` | Ya | admin, warehouse_manager | Hapus supplier. |
-| GET | `/api/stock-transactions` | Ya | admin, warehouse_manager, staff | Daftar transaksi stok. |
+| GET | `/api/stock-transactions` | Ya | admin, warehouse_manager, staff, viewer | Daftar transaksi stok. |
 | POST | `/api/stock-transactions` | Ya | admin, warehouse_manager, staff | Tambah transaksi stok. |
 | PUT | `/api/stock-transactions/{transaction}` | Ya | admin, warehouse_manager, staff | Ubah transaksi stok. |
 | DELETE | `/api/stock-transactions/{transaction}` | Ya | admin, warehouse_manager, staff | Hapus transaksi stok. |
+| GET | `/api/stock-transfers` | Ya | admin, warehouse_manager, staff, viewer | Daftar transfer stok. |
+| POST | `/api/stock-transfers` | Ya | admin, warehouse_manager, staff | Transfer stok antar gudang. |
+| GET | `/api/stock-transfers/{id}` | Ya | admin, warehouse_manager, staff, viewer | Detail transfer stok. |
 | GET | `/api/reports/export` | Ya | admin, warehouse_manager, staff, viewer | Export laporan CSV. |
 | GET | `/api/audit-logs` | Ya | admin, warehouse_manager | Daftar audit log. |
 | GET | `/api/health` | Tidak | Public/system check | Status API dan database. |
+| GET | `/api/notifications/critical-stock` | Ya | admin, warehouse_manager, staff, viewer | Notifikasi stok kritis dari data produk. |
+| GET | `/api/error-logs` | Ya | admin, warehouse_manager | Daftar error log dengan filter severity. |
+| GET | `/api/error-logs/summary` | Ya | admin, warehouse_manager | Ringkasan jumlah error berdasarkan severity. |
+| GET | `/api/users` | Ya | admin | Daftar user internal untuk manajemen role. |
+| PUT | `/api/users/{id}/role` | Ya | admin | Mengubah role user internal. |
+| POST | `/api/import/products` | Ya | admin, warehouse_manager | Upload CSV produk dan dispatch queue import. |
+| GET | `/api/import/jobs` | Ya | admin, warehouse_manager | Daftar status import job. |
+| GET | `/api/import/jobs/{id}` | Ya | admin, warehouse_manager | Detail status import job. |
+| POST | `/api/reports/generate` | Ya | admin, warehouse_manager | Generate laporan stok via queue. |
+| GET | `/api/reports/jobs` | Ya | admin, warehouse_manager, staff, viewer | Daftar report job. |
+| GET | `/api/reports/jobs/{id}` | Ya | admin, warehouse_manager, staff, viewer | Detail report job. |
+| GET | `/api/reports/jobs/{id}/download` | Ya | admin, warehouse_manager, staff, viewer | Download file report job yang selesai. |
 
 Catatan:
 
@@ -317,6 +358,12 @@ Jalankan backend:
 php artisan serve
 ```
 
+Jalankan queue worker pada terminal terpisah agar import CSV dan generate laporan background diproses:
+
+```bash
+php artisan queue:work
+```
+
 Default backend berjalan pada:
 
 ```text
@@ -343,6 +390,7 @@ DB_PASSWORD=your_password
 FILESYSTEM_DISK=local
 SESSION_DRIVER=file
 SESSION_LIFETIME=120
+QUEUE_CONNECTION=database
 ```
 
 Jika gambar produk tidak tampil, pastikan:
@@ -416,16 +464,44 @@ Alur demo utama:
 4. Tambah Gudang.
 5. Tambah Supplier.
 6. Tambah Produk dan upload gambar.
-7. Buat transaksi Stok Masuk.
-8. Buat transaksi Stok Keluar.
-9. Edit atau hapus transaksi stok jika diperlukan.
-10. Cek perubahan stok produk.
-11. Cek produk stok kritis di dashboard.
-12. Cek audit log.
-13. Export laporan CSV.
-14. Export PDF melalui print browser.
-15. Cek Status Sistem.
-16. Logout.
+7. Isi Harga Satuan produk agar nilai inventaris terhitung.
+8. Tambah Gudang dengan latitude dan longitude untuk menampilkan marker peta.
+9. Buat transaksi Stok Masuk ke gudang A.
+10. Transfer stok dari gudang A ke gudang B.
+11. Buat transaksi Stok Keluar dari gudang B.
+12. Edit atau hapus transaksi stok jika diperlukan.
+13. Cek perubahan stok produk, stok per gudang, dan nilai inventaris di dashboard/produk.
+14. Cek produk stok kritis di dashboard/notifikasi.
+15. Cek audit log dan error severity chart.
+16. Export laporan CSV.
+17. Export PDF melalui print browser.
+18. Cek Status Sistem.
+19. Logout.
+
+### Alur Import CSV Produk
+
+1. Login sebagai Admin atau Manajer Gudang.
+2. Buka menu Impor Data.
+3. Siapkan file CSV maksimal 5 MB dengan header:
+
+```csv
+sku,name,category,warehouse,supplier,current_stock,minimum_stock,unit_price
+SKU-001,Kabel LAN,Elektronik,Gudang Jakarta,PT Sumber Jaya,50,10,25000
+```
+
+4. Upload file CSV.
+5. Jalankan `php artisan queue:work` pada terminal backend.
+6. Klik Muat Ulang untuk melihat status `pending`, `processing`, `completed`, atau `failed`.
+7. Jika selesai, produk, kategori, gudang, dan supplier dari CSV masuk ke database.
+
+### Alur Generate Laporan Background
+
+1. Login sebagai Admin atau Manajer Gudang.
+2. Buka menu Laporan.
+3. Pada bagian Generate Laporan Besar, klik Generate Laporan.
+4. Jalankan `php artisan queue:work`.
+5. Klik Muat Ulang.
+6. Jika status `completed`, klik Download untuk mengambil CSV hasil generate.
 
 ## Keamanan Sistem
 
@@ -442,6 +518,9 @@ Keamanan yang sudah diterapkan:
 - Validasi request backend.
 - Query menggunakan Eloquent ORM/Query Builder untuk mengurangi risiko SQL Injection.
 - Upload gambar dibatasi format dan ukuran.
+- Session timeout otomatis saat user idle.
+- Error log mencatat kejadian warning seperti stok keluar melebihi stok tersedia.
+- Update stok per gudang dan transfer antar gudang dibungkus `DB::transaction` untuk menjaga konsistensi.
 
 Catatan:
 
@@ -496,19 +575,18 @@ Catatan:
 
 SmartStock Pro saat ini merupakan MVP/demo. Batasan yang masih ada:
 
-- Import CSV/Excel belum production-ready.
-- Queue jobs masih simulasi.
+- Import Excel belum tersedia; import yang functional saat ini adalah CSV.
 - Monitoring resource advanced masih simulasi.
-- Notifikasi real-time belum aktif.
+- Notifikasi stok kritis belum WebSocket/push real-time; saat ini masih fetch API/manual refresh.
 - Email notification belum aktif.
-- Transfer stok antar gudang belum tersedia.
 - FIFO/LIFO batch layer belum tersedia.
 - Backend PDF generator belum tersedia.
-- Pagination dan sorting backend belum diterapkan penuh pada semua modul.
-- Pencarian produk masih dapat dikembangkan lebih lanjut.
+- Monitoring CPU, disk, dan network server asli belum tersedia.
+- Queue sudah functional untuk import CSV dan background report, tetapi setup production masih perlu service manager, retry policy, queue monitoring, dan worker deployment yang stabil.
+- Sinkronisasi otomatis antar gudang secara enterprise belum tersedia. Transfer stok manual antar gudang sudah functional.
 
 ## Kesimpulan
 
-SmartStock Pro sudah memenuhi kebutuhan inti sistem inventaris berbasis web untuk demo BNSP, yaitu login multi-role, CRUD data master, transaksi stok masuk/keluar, update stok otomatis, dashboard, audit log, upload gambar produk, laporan, dan health check. Sistem sudah menggunakan arsitektur frontend-backend terpisah dengan React, Laravel REST API, PostgreSQL, dan Laravel Sanctum.
+SmartStock Pro sudah memenuhi kebutuhan inti sistem inventaris berbasis web untuk demo BNSP, yaitu login multi-role, Role Access UI Management, CRUD data master, transaksi stok masuk/keluar, update stok otomatis, stok per gudang, transfer stok antar gudang, dashboard, nilai inventaris, peta gudang interaktif, audit log, error log severity, upload gambar produk, import CSV via queue, background report generation, laporan CSV, export PDF via browser print, dan health check response time/resource PHP. Sistem sudah menggunakan arsitektur frontend-backend terpisah dengan React, Laravel REST API, PostgreSQL, dan Laravel Sanctum.
 
 Beberapa fitur lanjutan masih dicatat sebagai simulasi MVP atau rancangan pengembangan. Dengan struktur yang sudah dipisahkan antara frontend, backend, API services, middleware, dan dokumentasi, project ini dapat dikembangkan lebih lanjut menuju sistem production yang lebih lengkap.

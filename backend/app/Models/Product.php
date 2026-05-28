@@ -18,6 +18,7 @@ class Product extends Model
         'description',
         'current_stock',
         'minimum_stock',
+        'unit_price',
         'unit',
         'image',
     ];
@@ -53,5 +54,10 @@ class Product extends Model
     public function stockTransactions()
     {
         return $this->hasMany(StockTransaction::class);
+    }
+
+    public function warehouseStocks()
+    {
+        return $this->hasMany(WarehouseStock::class);
     }
 }

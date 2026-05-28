@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Product;
 use App\Models\StockTransaction;
+use App\Models\WarehouseStock;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -39,6 +40,17 @@ class DashboardController extends Controller
             ->orderBy('product_categories.name')
             ->get();
 
+        $totalInventoryValue = Product::query()
+            ->selectRaw('COALESCE(SUM(current_stock * unit_price), 0) as total')
+            ->value('total');
+
+        $warehouseStockSummary = WarehouseStock::query()
+            ->join('warehouses', 'warehouse_stocks.warehouse_id', '=', 'warehouses.id')
+            ->select('warehouses.name as warehouse', DB::raw('SUM(warehouse_stocks.quantity) as quantity'))
+            ->groupBy('warehouses.name')
+            ->orderBy('warehouses.name')
+            ->get();
+
         return response()->json([
             'success' => true,
             'message' => 'Dashboard inventory berhasil diambil',
@@ -46,9 +58,11 @@ class DashboardController extends Controller
                 'total_products' => Product::count(),
                 'total_stock_in' => (int) $totalStockIn,
                 'total_stock_out' => (int) $totalStockOut,
+                'total_inventory_value' => (float) $totalInventoryValue,
                 'critical_stock_products' => $criticalStockProducts,
                 'latest_stock_transactions' => $latestStockTransactions,
                 'stock_movement_by_category' => $stockMovementByCategory,
+                'warehouse_stock_summary' => $warehouseStockSummary,
             ],
         ]);
     }

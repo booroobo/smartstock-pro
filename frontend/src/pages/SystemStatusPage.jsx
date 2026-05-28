@@ -5,14 +5,30 @@ import DataTable from "../components/DataTable";
 import Alert from "../components/Alert";
 import { useAuth } from "../contexts/AuthContext";
 import { getHealth } from "../api/systemApi";
-import { getErrorLogs } from "../api/errorLogApi";
+import { getErrorLogs, getErrorLogSummary } from "../api/errorLogApi";
 import { canViewAuditLogs } from "../utils/roles";
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
+
+const formatBytes = (bytes) => {
+  const value = Number(bytes || 0);
+  if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
+  return `${(value / (1024 * 1024)).toFixed(1)} MB`;
+};
 
 export default function SystemStatusPage() {
   const { user } = useAuth();
   const canSeeErrorLogs = canViewAuditLogs(user?.role);
   const [status, setStatus] = useState(null);
   const [errorLogs, setErrorLogs] = useState([]);
+  const [errorSummary, setErrorSummary] = useState({ critical: 0, warning: 0, info: 0 });
   const [severity, setSeverity] = useState("");
   const [error, setError] = useState("");
 
@@ -28,9 +44,13 @@ export default function SystemStatusPage() {
   const fetchErrorLogs = async (selectedSeverity = severity) => {
     if (!canSeeErrorLogs) return;
     try {
-      const response = await getErrorLogs({ severity: selectedSeverity, per_page: 10 });
-      const payload = response.data.data;
+      const [logsResponse, summaryResponse] = await Promise.all([
+        getErrorLogs({ severity: selectedSeverity, per_page: 10 }),
+        getErrorLogSummary(),
+      ]);
+      const payload = logsResponse.data.data;
       setErrorLogs(payload.data || payload);
+      setErrorSummary(summaryResponse.data.data);
     } catch {
       setError("Error log gagal dimuat.");
     }
@@ -48,6 +68,12 @@ export default function SystemStatusPage() {
     fetchErrorLogs();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const severityData = [
+    { severity: "Critical", total: errorSummary.critical || 0 },
+    { severity: "Warning", total: errorSummary.warning || 0 },
+    { severity: "Info", total: errorSummary.info || 0 },
+  ];
 
   return (
     <DashboardLayout title="Status Sistem" subtitle="Health check" onRefresh={refreshAll}>
@@ -70,8 +96,30 @@ export default function SystemStatusPage() {
         <SummaryCard label="API" value={status?.api_status || "-"} icon="cloud_done" hint="Online" />
         <SummaryCard label="Database" value={status?.database_status || "-"} icon="database" hint="PostgreSQL" />
         <SummaryCard label="Response Time" value={status?.response_time_ms ? `${status.response_time_ms} ms` : "-"} icon="speed" hint={Number(status?.response_time_ms || 0) > 1000 ? "Warning" : "Normal"} />
-        <SummaryCard label="Environment" value={status?.environment || "-"} icon="terminal" hint={status?.app_name || "SmartStock Pro"} />
+        <SummaryCard label="Uptime Status" value={status?.uptime_status || "-"} icon="monitor_heart" hint={status?.app_name || "SmartStock Pro"} />
       </section>
+
+      <section className="ss-grid-4">
+        <SummaryCard label="Memory Usage" value={formatBytes(status?.memory_usage)} icon="memory" hint="PHP runtime" />
+        <SummaryCard label="Memory Peak" value={formatBytes(status?.memory_peak_usage)} icon="developer_board" hint="Peak usage" />
+        <SummaryCard label="PHP Version" value={status?.php_version || "-"} icon="code" hint={status?.environment || "-"} />
+        <SummaryCard label="Server Time" value={status?.server_time ? new Date(status.server_time).toLocaleString("id-ID") : "-"} icon="schedule" hint="Backend time" />
+      </section>
+
+      {canSeeErrorLogs && <section className="ss-card">
+        <h2>Ringkasan Severity Error</h2>
+        <div className="ss-chart compact-chart">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={severityData}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="severity" />
+              <YAxis allowDecimals={false} />
+              <Tooltip />
+              <Bar dataKey="total" fill="#0f172a" name="Jumlah log" />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </section>}
 
       {canSeeErrorLogs && <section className="ss-card">
         <div className="ss-page-head compact">

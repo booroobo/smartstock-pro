@@ -7,6 +7,7 @@ use App\Models\ErrorLog;
 use App\Models\Product;
 use App\Models\StockTransaction;
 use App\Models\Warehouse;
+use App\Models\WarehouseStock;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -25,11 +26,11 @@ class TransactionController extends Controller
         if ($request->filled('search')) {
             $search = $request->search;
             $query->where(function ($q) use ($search) {
-                $q->where('notes', 'like', "%{$search}%")
+                $q->where('notes', 'ilike', "%{$search}%")
                     ->orWhere('id', $search)
                     ->orWhereHas('product', function ($productQuery) use ($search) {
-                        $productQuery->where('name', 'like', "%{$search}%")
-                            ->orWhere('sku', 'like', "%{$search}%");
+                        $productQuery->where('name', 'ilike', "%{$search}%")
+                            ->orWhere('sku', 'ilike', "%{$search}%");
                     });
             });
         }
@@ -77,7 +78,7 @@ class TransactionController extends Controller
         $transaction = DB::transaction(function () use ($request, $validated) {
             $product = $this->findProduct($validated['product_id']);
             $this->findWarehouse($validated['warehouse_id']);
-            $this->applyStock($product, $validated['type'], (int) $validated['quantity']);
+            $this->applyWarehouseStock($product, (int) $validated['warehouse_id'], $validated['type'], (int) $validated['quantity']);
 
             $transaction = StockTransaction::create([
                 'user_id' => $request->user()->id,
@@ -118,12 +119,26 @@ class TransactionController extends Controller
 
         DB::transaction(function () use ($request, $transaction, $validated) {
             $oldValues = $transaction->toArray();
-            $oldProduct = $this->findProduct($transaction->product_id);
-            $this->reverseStock($oldProduct, $transaction->type, (int) $transaction->quantity);
+            $sameStockBucket = (int) $transaction->product_id === (int) $validated['product_id']
+                && (int) $transaction->warehouse_id === (int) $validated['warehouse_id'];
 
-            $newProduct = $this->findProduct($validated['product_id']);
-            $this->findWarehouse($validated['warehouse_id']);
-            $this->applyStock($newProduct, $validated['type'], (int) $validated['quantity']);
+            if ($sameStockBucket) {
+                $product = $this->findProduct($transaction->product_id);
+                $oldEffect = $transaction->type === 'stock_in'
+                    ? (int) $transaction->quantity
+                    : -1 * (int) $transaction->quantity;
+                $newEffect = $validated['type'] === 'stock_in'
+                    ? (int) $validated['quantity']
+                    : -1 * (int) $validated['quantity'];
+                $this->adjustWarehouseStockByDelta($product, (int) $transaction->warehouse_id, $newEffect - $oldEffect);
+            } else {
+                $oldProduct = $this->findProduct($transaction->product_id);
+                $this->reverseWarehouseStock($oldProduct, (int) $transaction->warehouse_id, $transaction->type, (int) $transaction->quantity);
+
+                $newProduct = $this->findProduct($validated['product_id']);
+                $this->findWarehouse($validated['warehouse_id']);
+                $this->applyWarehouseStock($newProduct, (int) $validated['warehouse_id'], $validated['type'], (int) $validated['quantity']);
+            }
 
             $transaction->update($validated);
             $this->audit($request, 'update', $transaction, $oldValues, $transaction->fresh()->toArray());
@@ -141,7 +156,7 @@ class TransactionController extends Controller
         DB::transaction(function () use ($request, $transaction) {
             $oldValues = $transaction->toArray();
             $product = $this->findProduct($transaction->product_id);
-            $this->reverseStock($product, $transaction->type, (int) $transaction->quantity);
+            $this->reverseWarehouseStock($product, (int) $transaction->warehouse_id, $transaction->type, (int) $transaction->quantity);
             $transaction->delete();
             $this->audit($request, 'delete', $transaction, $oldValues, null);
         });
@@ -162,36 +177,92 @@ class TransactionController extends Controller
         return Warehouse::findOrFail($id);
     }
 
-    private function applyStock(Product $product, string $type, int $quantity): void
+    private function applyWarehouseStock(Product $product, int $warehouseId, string $type, int $quantity): void
     {
-        if ($type === 'stock_out' && $product->current_stock < $quantity) {
+        $warehouseStock = $this->getOrCreateWarehouseStock($product, $warehouseId);
+
+        if ($type === 'stock_out' && $warehouseStock->quantity < $quantity) {
             ErrorLog::create([
                 'severity' => 'warning',
                 'source' => 'stock_transactions.stock_out',
-                'message' => 'Stok produk tidak mencukupi untuk transaksi stok keluar.',
+                'message' => 'Stok gudang tidak mencukupi untuk transaksi stok keluar.',
                 'context' => [
                     'product_id' => $product->id,
                     'product_name' => $product->name,
-                    'current_stock' => $product->current_stock,
+                    'warehouse_id' => $warehouseId,
+                    'warehouse_stock' => $warehouseStock->quantity,
                     'requested_quantity' => $quantity,
                 ],
                 'user_id' => request()->user()?->id,
                 'ip_address' => request()->ip(),
             ]);
-            abort(422, 'Stok produk tidak mencukupi.');
+            abort(422, 'Stok gudang tidak mencukupi.');
         }
 
-        $product->current_stock = $type === 'stock_in'
-            ? $product->current_stock + $quantity
-            : $product->current_stock - $quantity;
-        $product->save();
+        $warehouseStock->quantity = $type === 'stock_in'
+            ? $warehouseStock->quantity + $quantity
+            : $warehouseStock->quantity - $quantity;
+        $warehouseStock->save();
+
+        $this->syncProductCurrentStock($product);
     }
 
-    private function reverseStock(Product $product, string $type, int $quantity): void
+    private function reverseWarehouseStock(Product $product, int $warehouseId, string $type, int $quantity): void
     {
-        $product->current_stock = $type === 'stock_in'
-            ? max(0, $product->current_stock - $quantity)
-            : $product->current_stock + $quantity;
+        $warehouseStock = $this->getOrCreateWarehouseStock($product, $warehouseId);
+
+        if ($type === 'stock_in' && $warehouseStock->quantity < $quantity) {
+            abort(422, 'Transaksi tidak dapat dibatalkan karena stok gudang sudah berpindah atau tidak mencukupi.');
+        }
+
+        $warehouseStock->quantity = $type === 'stock_in'
+            ? $warehouseStock->quantity - $quantity
+            : $warehouseStock->quantity + $quantity;
+        $warehouseStock->save();
+
+        $this->syncProductCurrentStock($product);
+    }
+
+    private function adjustWarehouseStockByDelta(Product $product, int $warehouseId, int $delta): void
+    {
+        if ($delta === 0) {
+            return;
+        }
+
+        $warehouseStock = $this->getOrCreateWarehouseStock($product, $warehouseId);
+
+        if ($delta < 0 && $warehouseStock->quantity < abs($delta)) {
+            abort(422, 'Transaksi tidak dapat diperbarui karena stok gudang tidak mencukupi.');
+        }
+
+        $warehouseStock->quantity += $delta;
+        $warehouseStock->save();
+
+        $this->syncProductCurrentStock($product);
+    }
+
+    private function getOrCreateWarehouseStock(Product $product, int $warehouseId): WarehouseStock
+    {
+        $warehouseStock = WarehouseStock::where('product_id', $product->id)
+            ->where('warehouse_id', $warehouseId)
+            ->lockForUpdate()
+            ->first();
+
+        if ($warehouseStock) {
+            return $warehouseStock;
+        }
+
+        return WarehouseStock::create([
+            'product_id' => $product->id,
+            'warehouse_id' => $warehouseId,
+            'quantity' => 0,
+            'minimum_stock' => $product->minimum_stock,
+        ]);
+    }
+
+    private function syncProductCurrentStock(Product $product): void
+    {
+        $product->current_stock = (int) WarehouseStock::where('product_id', $product->id)->sum('quantity');
         $product->save();
     }
 

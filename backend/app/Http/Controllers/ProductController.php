@@ -16,18 +16,18 @@ class ProductController extends Controller
     public function index(Request $request)
     {
         $perPage = min((int) $request->input('per_page', 10), 100);
-        $sortBy = in_array($request->input('sort_by'), ['name', 'sku', 'current_stock', 'minimum_stock', 'created_at', 'updated_at'], true)
+        $sortBy = in_array($request->input('sort_by'), ['name', 'sku', 'current_stock', 'minimum_stock', 'unit_price', 'created_at', 'updated_at'], true)
             ? $request->input('sort_by')
             : 'created_at';
         $sortDirection = strtolower($request->input('sort_direction')) === 'asc' ? 'asc' : 'desc';
 
-        $query = Product::with(['category', 'supplier']);
+        $query = Product::with(['category', 'supplier', 'warehouseStocks.warehouse']);
 
         if ($request->filled('search')) {
             $search = $request->search;
             $query->where(function ($q) use ($search) {
-                $q->where('name', 'like', "%{$search}%")
-                    ->orWhere('sku', 'like', "%{$search}%");
+                $q->where('name', 'ilike', "%{$search}%")
+                    ->orWhere('sku', 'ilike', "%{$search}%");
             });
         }
 
@@ -40,7 +40,7 @@ class ProductController extends Controller
         }
 
         if ($request->filled('warehouse_id')) {
-            $query->whereHas('stockTransactions', function ($q) use ($request) {
+            $query->whereHas('warehouseStocks', function ($q) use ($request) {
                 $q->where('warehouse_id', $request->warehouse_id);
             });
         }
@@ -71,6 +71,7 @@ class ProductController extends Controller
                 'name' => 'required|string|max:150',
                 'description' => 'nullable|string',
                 'minimum_stock' => 'required|integer|min:0',
+                'unit_price' => 'nullable|numeric|min:0|max:9999999999999.99',
                 'unit' => 'required|string|max:30',
                 'image' => 'nullable|image|mimes:jpg,jpeg,png|max:2048',
             ]);
@@ -96,12 +97,12 @@ class ProductController extends Controller
 
         $this->audit($request, 'create', $product, null, $product->toArray());
 
-        return response()->json(['success' => true, 'message' => 'Produk berhasil dibuat', 'data' => $product->load(['category', 'supplier'])], 201);
+        return response()->json(['success' => true, 'message' => 'Produk berhasil dibuat', 'data' => $product->load(['category', 'supplier', 'warehouseStocks.warehouse'])], 201);
     }
 
     public function show(Request $request, Product $product)
     {
-        return response()->json(['success' => true, 'message' => 'Detail produk berhasil diambil', 'data' => $product->load(['category', 'supplier'])]);
+        return response()->json(['success' => true, 'message' => 'Detail produk berhasil diambil', 'data' => $product->load(['category', 'supplier', 'warehouseStocks.warehouse'])]);
     }
 
     public function update(Request $request, Product $product)
@@ -114,6 +115,7 @@ class ProductController extends Controller
                 'name' => 'required|string|max:150',
                 'description' => 'nullable|string',
                 'minimum_stock' => 'required|integer|min:0',
+                'unit_price' => 'nullable|numeric|min:0|max:9999999999999.99',
                 'unit' => 'required|string|max:30',
                 'image' => 'nullable|image|mimes:jpg,jpeg,png|max:2048',
             ]);
@@ -138,7 +140,7 @@ class ProductController extends Controller
         $product->update($validated);
         $this->audit($request, 'update', $product, $oldValues, $product->fresh()->toArray());
 
-        return response()->json(['success' => true, 'message' => 'Produk berhasil diperbarui', 'data' => $product->fresh()->load(['category', 'supplier'])]);
+        return response()->json(['success' => true, 'message' => 'Produk berhasil diperbarui', 'data' => $product->fresh()->load(['category', 'supplier', 'warehouseStocks.warehouse'])]);
     }
 
     public function destroy(Request $request, Product $product)

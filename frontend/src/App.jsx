@@ -7,6 +7,7 @@ import CategoriesPage from "./pages/CategoriesPage";
 import ProductsPage from "./pages/ProductsPage";
 import WarehousesPage from "./pages/WarehousesPage";
 import StockTransactionsPage from "./pages/StockTransactionsPage";
+import StockTransfersPage from "./pages/StockTransfersPage";
 import ReportsPage from "./pages/ReportsPage";
 import SystemStatusPage from "./pages/SystemStatusPage";
 import SuppliersPage from "./pages/SuppliersPage";
@@ -56,6 +57,14 @@ export default function App() {
               element={
                 <ProtectedRoute>
                   <StockTransactionsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/stock-transfers"
+              element={
+                <ProtectedRoute>
+                  <StockTransfersPage />
                 </ProtectedRoute>
               }
             />

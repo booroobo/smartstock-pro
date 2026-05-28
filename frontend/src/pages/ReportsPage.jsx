@@ -4,15 +4,25 @@ import DataTable from "../components/DataTable";
 import Alert from "../components/Alert";
 import { useAuth } from "../contexts/AuthContext";
 import { getAuditLogs } from "../api/auditLogApi";
-import { exportStockReport } from "../api/reportApi";
+import { downloadReportJob, exportStockReport, generateStockReport, getReportJobs } from "../api/reportApi";
 import { getTransactions } from "../api/transactionApi";
+import { getDashboard } from "../api/dashboardApi";
 import { canViewAuditLogs, deniedMessage, displayStockType } from "../utils/roles";
+
+const formatRupiah = (value) =>
+  new Intl.NumberFormat("id-ID", {
+    style: "currency",
+    currency: "IDR",
+    maximumFractionDigits: 0,
+  }).format(Number(value || 0));
 
 export default function ReportsPage() {
   const { user } = useAuth();
   const canSeeAudit = canViewAuditLogs(user?.role);
   const [logs, setLogs] = useState([]);
+  const [reportJobs, setReportJobs] = useState([]);
   const [reportRows, setReportRows] = useState([]);
+  const [inventoryValue, setInventoryValue] = useState(0);
   const [filters, setFilters] = useState({ start_date: "", end_date: "", type: "" });
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
@@ -20,22 +30,31 @@ export default function ReportsPage() {
   const fetchLogs = async () => {
     if (!canSeeAudit) return;
     try {
-      const response = await getAuditLogs();
-      setLogs(response.data.data);
+      const [auditResponse, reportJobResponse] = await Promise.all([
+        getAuditLogs(),
+        getReportJobs({ per_page: 10 }),
+      ]);
+      setLogs(auditResponse.data.data);
+      const payload = reportJobResponse.data.data;
+      setReportJobs(payload.data || payload);
     } catch (err) {
-      setError(err.response?.status === 403 ? deniedMessage : "Log aktivitas gagal dimuat.");
+      setError(err.response?.status === 403 ? deniedMessage : "Data laporan gagal dimuat.");
     }
   };
 
   const fetchReportRows = async (nextFilters = filters) => {
-    const response = await getTransactions({
-      ...nextFilters,
-      per_page: 100,
-      sort_by: "transaction_date",
-      sort_direction: "desc",
-    });
-    const payload = response.data.data;
+    const [transactionResponse, dashboardResponse] = await Promise.all([
+      getTransactions({
+        ...nextFilters,
+        per_page: 100,
+        sort_by: "transaction_date",
+        sort_direction: "desc",
+      }),
+      getDashboard(),
+    ]);
+    const payload = transactionResponse.data.data;
     setReportRows(payload.data || payload);
+    setInventoryValue(dashboardResponse.data.data?.total_inventory_value || 0);
   };
 
   useEffect(() => {
@@ -57,6 +76,32 @@ export default function ReportsPage() {
     link.remove();
     window.URL.revokeObjectURL(url);
     setNotice("Laporan berhasil diekspor.");
+  };
+
+  const generateBackgroundReport = async () => {
+    try {
+      await generateStockReport();
+      setNotice("Generate laporan besar masuk ke antrian. Jalankan queue worker untuk memproses.");
+      await fetchLogs();
+    } catch (err) {
+      setError(err.response?.status === 403 ? deniedMessage : "Generate laporan gagal dimulai.");
+    }
+  };
+
+  const downloadGeneratedReport = async (job) => {
+    try {
+      const response = await downloadReportJob(job.id);
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", `smartstock-background-report-${job.id}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch {
+      setError("File laporan belum tersedia.");
+    }
   };
 
   const exportPdf = async () => {
@@ -91,6 +136,9 @@ export default function ReportsPage() {
   const totalStockOut = reportRows
     .filter((row) => row.type === "stock_out")
     .reduce((total, row) => total + Number(row.quantity || 0), 0);
+
+  const totalTransactionValue = reportRows
+    .reduce((total, row) => total + (Number(row.quantity || 0) * Number(row.product?.unit_price || 0)), 0);
 
   return (
     <DashboardLayout title="Laporan" subtitle="Ekspor CSV dan ringkasan audit" onRefresh={fetchLogs}>
@@ -135,6 +183,39 @@ export default function ReportsPage() {
         </div>
       </section>
 
+      {canSeeAudit && <section className="ss-card">
+        <div className="ss-page-head compact">
+          <div>
+            <h2>Generate Laporan Besar</h2>
+            <p>Laporan CSV dibuat di background menggunakan Laravel Queue database.</p>
+          </div>
+          <div className="ss-actions">
+            <button className="ss-secondary" type="button" onClick={fetchLogs}>Muat Ulang</button>
+            <button className="ss-primary" type="button" onClick={generateBackgroundReport}>
+              <span className="material-symbols-outlined">playlist_add_check</span>
+              Generate Laporan
+            </button>
+          </div>
+        </div>
+        <DataTable
+          columns={[
+            { key: "created_at", label: "Waktu" },
+            { key: "type", label: "Tipe" },
+            { key: "status", label: "Status", render: (row) => <span className={`ss-badge ${row.status === "failed" ? "danger" : row.status === "completed" ? "success" : "warning"}`}>{row.status}</span> },
+            { key: "user", label: "User", render: (row) => row.user?.name || "-" },
+            { key: "error_message", label: "Error", render: (row) => row.error_message || "-" },
+            {
+              key: "download",
+              label: "Download",
+              render: (row) => row.status === "completed" ? (
+                <button className="ss-secondary" onClick={() => downloadGeneratedReport(row)}>Download</button>
+              ) : "-",
+            },
+          ]}
+          rows={reportJobs}
+        />
+      </section>}
+
       <section className="ss-card print-report">
         <div className="print-report-header">
           <div className="print-logo">SS</div>
@@ -150,6 +231,8 @@ export default function ReportsPage() {
           <strong>Total transaksi: {reportRows.length}</strong>
           <strong>Total stok masuk: {totalStockIn}</strong>
           <strong>Total stok keluar: {totalStockOut}</strong>
+          <strong>Nilai transaksi: {formatRupiah(totalTransactionValue)}</strong>
+          <strong>Nilai inventaris: {formatRupiah(inventoryValue)}</strong>
         </div>
         <table className="print-table">
           <thead>
@@ -159,12 +242,14 @@ export default function ReportsPage() {
               <th>Gudang</th>
               <th>Tipe</th>
               <th>Jumlah</th>
+              <th>Harga Satuan</th>
+              <th>Nilai</th>
               <th>Catatan</th>
             </tr>
           </thead>
           <tbody>
             {reportRows.length === 0 && (
-              <tr><td colSpan="6">Data laporan belum tersedia.</td></tr>
+              <tr><td colSpan="8">Data laporan belum tersedia.</td></tr>
             )}
             {reportRows.map((row) => (
               <tr key={row.id}>
@@ -173,11 +258,16 @@ export default function ReportsPage() {
                 <td>{row.warehouse?.name || "-"}</td>
                 <td>{displayStockType(row.type)}</td>
                 <td>{row.quantity}</td>
+                <td>{formatRupiah(row.product?.unit_price)}</td>
+                <td>{formatRupiah(Number(row.quantity || 0) * Number(row.product?.unit_price || 0))}</td>
                 <td>{row.notes || "-"}</td>
               </tr>
             ))}
           </tbody>
         </table>
+        <footer className="print-footer">
+          <p>Dicetak dari SmartStock Pro. Laporan ini dibuat menggunakan fitur print browser.</p>
+        </footer>
       </section>
 
       {canSeeAudit ? <section className="ss-card">

@@ -1,8 +1,11 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { getCriticalStockNotifications } from "../api/notificationApi";
 
 export default function Navbar({ title, subtitle, onRefresh, onPrepared }) {
+  const navigate = useNavigate();
   const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
   const [notifications, setNotifications] = useState({ total_critical_stock: 0, products: [] });
   const [error, setError] = useState("");
 
@@ -20,12 +23,24 @@ export default function Navbar({ title, subtitle, onRefresh, onPrepared }) {
     fetchNotifications();
   }, []);
 
+  const handleSearch = (event) => {
+    event.preventDefault();
+    const keyword = search.trim();
+    if (!keyword) return;
+    navigate(`/products?search=${encodeURIComponent(keyword)}`);
+  };
+
   return (
     <header className="ss-navbar">
-      <div className="ss-search">
+      <form className="ss-search" onSubmit={handleSearch}>
         <span className="material-symbols-outlined">search</span>
-        <input placeholder="Cari inventaris, SKU, gudang..." onFocus={onPrepared} />
-      </div>
+        <input
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+          placeholder="Cari produk atau SKU..."
+          aria-label="Cari produk atau SKU"
+        />
+      </form>
       <div className="ss-navbar-title">
         <strong>{title}</strong>
         {subtitle && <span>{subtitle}</span>}

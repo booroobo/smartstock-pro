@@ -4,7 +4,7 @@
 
 Dokumen ini menjelaskan analisis risiko keamanan informasi untuk SmartStock Pro, yaitu Website Sistem Manajemen Inventaris Multi Gudang berbasis React.js, Laravel REST API, PostgreSQL, dan Laravel Sanctum. Sistem ini digunakan oleh akun internal perusahaan dengan role `admin`, `warehouse_manager`, `staff`, dan `viewer`.
 
-SmartStock Pro pada tahap ini merupakan MVP/demo implementasi untuk studi kasus BNSP. Fitur inti seperti login, role access, CRUD data master, transaksi stok, audit log, upload gambar produk, export laporan, dan health check telah tersedia. Beberapa fitur lanjutan seperti notifikasi email, WebSocket real-time, transfer stok antar gudang, dan queue production-ready masuk dalam rencana pengembangan lanjutan.
+SmartStock Pro pada tahap ini merupakan MVP/demo implementasi untuk studi kasus BNSP. Fitur inti seperti login, role access, Role Access UI Management, CRUD data master, transaksi stok, stok per gudang, transfer stok antar gudang, audit log, upload gambar produk, import CSV via queue, background report generation, export laporan, dan health check telah tersedia. Beberapa fitur lanjutan seperti notifikasi email, WebSocket real-time, Import Excel, FIFO/LIFO batch layer penuh, backend PDF generator, monitoring CPU/disk/network asli, dan queue production-ready masuk dalam rencana pengembangan lanjutan.
 
 Tujuan dokumen ini adalah mengidentifikasi aset informasi, risiko utama, dampak, kontrol keamanan yang sudah diterapkan, serta langkah mitigasi yang disarankan agar sistem lebih aman saat dikembangkan menuju lingkungan produksi.
 
@@ -18,6 +18,8 @@ Tujuan dokumen ini adalah mengidentifikasi aset informasi, risiko utama, dampak,
 | Data gudang | Informasi lokasi dan identitas gudang perusahaan | Tinggi |
 | Data supplier | Kontak supplier, email, telepon, dan alamat | Sedang |
 | Transaksi stok | Riwayat stok masuk dan stok keluar | Tinggi |
+| Transfer stok antar gudang | Riwayat perpindahan stok dari gudang asal ke gudang tujuan | Tinggi |
+| Stok per gudang | Kuantitas produk pada setiap gudang | Tinggi |
 | Audit log | Catatan aktivitas pengguna, waktu, modul, aksi, dan IP address | Tinggi |
 | Error log | Catatan error aplikasi dengan severity, source, message, user, dan IP address | Sedang |
 | File gambar produk | File upload produk dalam format jpg/jpeg/png | Sedang |
@@ -39,6 +41,7 @@ Tujuan dokumen ini adalah mengidentifikasi aset informasi, risiko utama, dampak,
 | Error log exposure | Error log memuat informasi sensitif lalu dilihat oleh role tidak tepat | Kebocoran detail teknis sistem |
 | Backup tidak tersedia | Database atau file hilang tanpa cadangan | Kehilangan data operasional |
 | Audit log tidak lengkap | Aktivitas penting tidak tercatat | Sulit melakukan investigasi insiden |
+| Race condition stok | Dua proses stok berjalan bersamaan tanpa kontrol transaksi | Stok gudang tidak konsisten |
 
 ## 4. Dampak Risiko
 
@@ -65,6 +68,7 @@ Dampak risiko keamanan terhadap SmartStock Pro dapat dibagi menjadi beberapa kat
 | Error log exposure | Error log ditampilkan terbatas untuk role yang berwenang, dan sebaiknya tidak menyimpan password/token di field context. |
 | Backup tidak tersedia | Disarankan backup database harian dan backup file gambar produk secara berkala. |
 | Audit log tidak lengkap | Aksi utama seperti login, logout, CRUD master data, transaksi stok, dan export report dicatat ke audit log. |
+| Race condition stok | Transfer stok antar gudang diproses menggunakan database transaction dan lock stok gudang. |
 
 ## 6. Kontrol Keamanan yang Sudah Diterapkan
 
@@ -79,9 +83,14 @@ Kontrol keamanan yang sudah tersedia pada MVP SmartStock Pro:
 - Validasi request pada controller backend.
 - Audit log untuk aksi utama pengguna.
 - Error log dengan severity `info`, `warning`, dan `critical`.
+- Role Access UI Management untuk admin.
+- Stok per gudang.
+- Transfer stok antar gudang menggunakan database transaction.
+- Import CSV produk menggunakan Laravel Queue database.
+- Background report generation CSV menggunakan queue.
 - Session timeout frontend untuk user idle.
 - Validasi upload gambar produk untuk format dan ukuran.
-- Health check API dan database.
+- Health check API dan database, termasuk response time, memory usage, memory peak usage, PHP version, dan server time.
 - Data master bersifat company-wide/global, tetapi tetap dilindungi oleh role access.
 
 ## 7. Risiko Tersisa
@@ -89,12 +98,13 @@ Kontrol keamanan yang sudah tersedia pada MVP SmartStock Pro:
 Beberapa risiko yang masih tersisa pada tahap MVP:
 
 - Token masih disimpan di `localStorage`; pada production perlu evaluasi penggunaan cookie HttpOnly atau strategi token lifecycle yang lebih ketat.
-- Monitoring server masih terbatas pada health check API/database dan response time, belum mencakup CPU/memory real-time.
+- Monitoring server masih terbatas pada health check API/database, response time, memory usage, memory peak usage, PHP version, dan server time; belum mencakup CPU, disk IOPS, disk usage, dan network server asli.
 - Notifikasi stok kritis masih berbasis fetch endpoint, belum real-time melalui WebSocket atau push notification.
 - Error log harus dipastikan tidak menyimpan data sensitif seperti password, token, atau kredensial database.
 - Backup dan restore belum diotomatisasi oleh aplikasi.
 - Rate limiting login dan proteksi brute force perlu diperiksa kembali sebelum production.
-- Transfer stok antar gudang dan FIFO/LIFO batch layer belum diimplementasikan karena berisiko tinggi untuk MVP.
+- FIFO/LIFO batch layer penuh belum tersedia.
+- Queue sudah functional untuk import CSV dan background report, tetapi production setup masih perlu service manager, retry policy, queue monitoring, dan worker deployment yang stabil.
 
 ## 8. Rencana Pengembangan Keamanan
 
@@ -110,9 +120,11 @@ Rencana pengembangan keamanan lanjutan:
 8. Menambahkan audit trail yang lebih rinci untuk perubahan field penting.
 9. Menambahkan review berkala terhadap role dan hak akses pengguna.
 10. Menambahkan keamanan storage file, termasuk scanning file dan pemisahan object storage jika volume gambar meningkat.
+11. Menambahkan backend PDF generator jika kebutuhan laporan formal tidak cukup dipenuhi oleh browser print.
+12. Menambahkan Import Excel jika kebutuhan operasional membutuhkan format `.xlsx/.xls`.
 
 ## 9. Kesimpulan
 
-SmartStock Pro MVP telah menerapkan kontrol keamanan dasar yang relevan untuk studi kasus BNSP, termasuk autentikasi Sanctum, password hashing, middleware role, audit log, error log, validasi upload file, session timeout, dan health check. Sistem sudah cukup untuk demo fitur inti inventaris multi-role dan multi-gudang.
+SmartStock Pro MVP telah menerapkan kontrol keamanan dasar yang relevan untuk studi kasus BNSP, termasuk autentikasi Sanctum, password hashing, middleware role, Role Access UI Management, audit log, error log, validasi upload file, session timeout, stok per gudang, transfer stok antar gudang, import CSV via queue, background report generation, dan health check. Sistem sudah cukup untuk demo fitur inti inventaris multi-role dan multi-gudang.
 
-Untuk penggunaan production, sistem masih membutuhkan penguatan pada manajemen token, backup otomatis, monitoring server lanjutan, notifikasi real-time, rate limiting, dan kontrol operasional lainnya. Fitur yang berisiko tinggi tidak dipaksakan pada MVP agar stabilitas sistem inti tetap terjaga.
+Untuk penggunaan production, sistem masih membutuhkan penguatan pada manajemen token, backup otomatis, monitoring server lanjutan, notifikasi real-time, email notification, rate limiting, queue worker production setup, dan kontrol operasional lainnya. Fitur lanjutan seperti Import Excel, FIFO/LIFO batch layer penuh, backend PDF generator, dan monitoring CPU/disk/network asli perlu direncanakan sebagai pengembangan berikutnya.
